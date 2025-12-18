@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpsertMonthlyFinancialDto } from './dto/upsert-monthly-financial.dto';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -59,6 +59,10 @@ export class MonthlyFinancialsService {
     month: number,
     dto: UpsertMonthlyFinancialDto,
   ) {
+    if (month < 1 || month > 12) {
+      throw new BadRequestException('Month must be between 1 and 12');
+    }
+
     const profit = dto.revenue - dto.cost;
 
     return this.prisma.monthlyFinancial.upsert({
@@ -89,6 +93,10 @@ export class MonthlyFinancialsService {
     month: number,
     file: Express.Multer.File,
   ) {
+    if (month < 1 || month > 12) {
+      throw new BadRequestException('Month must be between 1 and 12');
+    }
+
     const uploadDir = path.join(process.cwd(), 'uploads', 'financials', companyId, String(year));
 
     // Ensure directory exists
@@ -118,10 +126,14 @@ export class MonthlyFinancialsService {
       },
     });
 
-    return { pdfPath: filePath };
+    return { success: true };
   }
 
   async getPdfPath(companyId: string, year: number, month: number) {
+    if (month < 1 || month > 12) {
+      throw new BadRequestException('Month must be between 1 and 12');
+    }
+
     const record = await this.prisma.monthlyFinancial.findUnique({
       where: {
         companyId_year_month: { companyId, year, month },
@@ -136,6 +148,10 @@ export class MonthlyFinancialsService {
   }
 
   async deletePdf(companyId: string, year: number, month: number) {
+    if (month < 1 || month > 12) {
+      throw new BadRequestException('Month must be between 1 and 12');
+    }
+
     const record = await this.prisma.monthlyFinancial.findUnique({
       where: {
         companyId_year_month: { companyId, year, month },

@@ -12,6 +12,7 @@ import {
   UploadedFile,
   UseInterceptors,
   Res,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
@@ -49,7 +50,9 @@ export class MonthlyFinancialsController {
   }
 
   @Post('companies/:companyId/monthly-financials/:year/:month/pdf')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', {
+    limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+  }))
   async uploadPdf(
     @Param('companyId') companyId: string,
     @Param('year', ParseIntPipe) year: number,
@@ -57,6 +60,10 @@ export class MonthlyFinancialsController {
     @UploadedFile() file: Express.Multer.File,
     @CurrentUser() userId: string,
   ) {
+    if (!file || file.mimetype !== 'application/pdf') {
+      throw new BadRequestException('Only PDF files are allowed');
+    }
+
     await this.monthlyFinancialsService.verifyCompanyAccess(companyId, userId);
     return this.monthlyFinancialsService.savePdf(companyId, year, month, file);
   }
