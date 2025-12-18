@@ -16,60 +16,33 @@ import {
 import { CompanySwitcher } from "./company-switcher";
 import { UserButton } from "@clerk/nextjs";
 
-const navigation = [
-  {
-    name: "Dashboard",
-    href: "/dashboard",
-    icon: LayoutDashboard,
-  },
-  {
-    name: "Meetings",
-    href: "/meetings",
-    icon: Calendar,
-  },
-  {
-    name: "Action Items",
-    href: "/action-items",
-    icon: CheckSquare,
-  },
-  {
-    name: "Resolutions",
-    href: "/resolutions",
-    icon: Vote,
-  },
-  {
-    name: "Documents",
-    href: "/documents",
-    icon: FileText,
-  },
-  {
-    name: "Financials",
-    href: "/financials",
-    icon: DollarSign,
-  },
-  {
-    name: "Board Members",
-    href: "/members",
-    icon: Users,
-  },
-];
+interface SidebarProps {
+  companyId: string;
+}
 
-const secondaryNavigation = [
-  {
-    name: "Settings",
-    href: "/settings",
-    icon: Settings,
-  },
-];
-
-export function Sidebar() {
+export function Sidebar({ companyId }: SidebarProps) {
   const pathname = usePathname();
+  const basePath = `/companies/${companyId}`;
+
+  const navigation = [
+    { name: "Dashboard", href: `${basePath}/dashboard`, icon: LayoutDashboard },
+    { name: "Meetings", href: `${basePath}/meetings`, icon: Calendar },
+    { name: "Action Items", href: `${basePath}/action-items`, icon: CheckSquare },
+    { name: "Resolutions", href: `${basePath}/resolutions`, icon: Vote },
+    { name: "Documents", href: `${basePath}/documents`, icon: FileText },
+    { name: "Financials", href: `${basePath}/financials`, icon: DollarSign },
+    { name: "Board Members", href: `${basePath}/members`, icon: Users },
+  ];
+
+  const secondaryNavigation = [
+    { name: "Settings", href: `${basePath}/settings`, icon: Settings },
+  ];
 
   return (
     <div className="flex h-full w-64 flex-col border-r bg-gray-50/40">
       {/* Logo / App Name */}
       <div className="flex h-14 items-center border-b px-4">
-        <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
+        <Link href={`${basePath}/dashboard`} className="flex items-center gap-2 font-semibold">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Calendar className="h-4 w-4" />
           </div>
@@ -79,7 +52,7 @@ export function Sidebar() {
 
       {/* Company Switcher */}
       <div className="p-4">
-        <CompanySwitcher />
+        <CompanySwitcher currentCompanyId={companyId} />
       </div>
 
       {/* Main Navigation */}
@@ -131,7 +104,7 @@ export function Sidebar() {
       {/* User Section */}
       <div className="border-t p-4">
         <div className="flex items-center gap-3">
-          <UserButton afterSignOutUrl="/" />
+          <UserButton afterSignOutUrl="/sign-in" />
           <div className="flex-1 truncate">
             <p className="text-sm font-medium text-gray-700">Account</p>
           </div>
