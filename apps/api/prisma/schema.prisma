@@ -26,6 +26,7 @@ model User {
   uploadedDocs            Document[]
   votes                   Vote[]
   notificationPreferences NotificationPreference[]
+  sentInvitations         Invitation[]
 }
 
 // Companies (workspaces)
@@ -48,6 +49,7 @@ model Company {
   integrations            Integration[]
   meetingTemplates        MeetingTemplate[]
   notificationPreferences NotificationPreference[]
+  invitations             Invitation[]
 }
 
 // Company membership with roles
@@ -85,6 +87,36 @@ enum MemberStatus {
   ACTIVE
   INACTIVE
   FORMER
+}
+
+// Pending invitations
+model Invitation {
+  id        String           @id @default(cuid())
+  email     String
+  companyId String
+  role      MemberRole       @default(BOARD_MEMBER)
+  title     String?
+  token     String           @unique @default(cuid())
+  status    InvitationStatus @default(PENDING)
+  invitedBy String
+  expiresAt DateTime
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  inviter User    @relation(fields: [invitedBy], references: [id])
+
+  @@unique([email, companyId])
+  @@index([email])
+  @@index([token])
+  @@index([status])
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
 }
 
 // ==========================================
@@ -237,7 +269,7 @@ model ActionItem {
   agendaItemId String?
   title        String
   description  String?
-  assigneeId   String
+  assigneeId   String?
   dueDate      DateTime?
   priority     Priority     @default(MEDIUM)
   status       ActionStatus @default(PENDING)
@@ -245,7 +277,7 @@ model ActionItem {
   updatedAt    DateTime     @updatedAt
 
   company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  assignee   User        @relation(fields: [assigneeId], references: [id])
+  assignee   User?       @relation(fields: [assigneeId], references: [id])
   agendaItem AgendaItem? @relation(fields: [agendaItemId], references: [id])
 
   @@index([companyId])
