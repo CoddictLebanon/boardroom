@@ -31,7 +31,7 @@ export class MonthlyFinancialsController {
   async getYearData(
     @Param('companyId') companyId: string,
     @Query('year', ParseIntPipe) year: number,
-    @CurrentUser() userId: string,
+    @CurrentUser('userId') userId: string,
   ) {
     await this.monthlyFinancialsService.verifyCompanyAccess(companyId, userId);
     return this.monthlyFinancialsService.getYearData(companyId, year);
@@ -43,7 +43,7 @@ export class MonthlyFinancialsController {
     @Param('year', ParseIntPipe) year: number,
     @Param('month', ParseIntPipe) month: number,
     @Body() dto: UpsertMonthlyFinancialDto,
-    @CurrentUser() userId: string,
+    @CurrentUser('userId') userId: string,
   ) {
     await this.monthlyFinancialsService.verifyCompanyAccess(companyId, userId);
     return this.monthlyFinancialsService.upsertMonth(companyId, year, month, dto);
@@ -58,7 +58,7 @@ export class MonthlyFinancialsController {
     @Param('year', ParseIntPipe) year: number,
     @Param('month', ParseIntPipe) month: number,
     @UploadedFile() file: Express.Multer.File,
-    @CurrentUser() userId: string,
+    @CurrentUser('userId') userId: string,
   ) {
     if (!file || file.mimetype !== 'application/pdf') {
       throw new BadRequestException('Only PDF files are allowed');
@@ -73,7 +73,7 @@ export class MonthlyFinancialsController {
     @Param('companyId') companyId: string,
     @Param('year', ParseIntPipe) year: number,
     @Param('month', ParseIntPipe) month: number,
-    @CurrentUser() userId: string,
+    @CurrentUser('userId') userId: string,
     @Res() res: Response,
   ) {
     await this.monthlyFinancialsService.verifyCompanyAccess(companyId, userId);
@@ -89,7 +89,7 @@ export class MonthlyFinancialsController {
     @Param('companyId') companyId: string,
     @Param('year', ParseIntPipe) year: number,
     @Param('month', ParseIntPipe) month: number,
-    @CurrentUser() userId: string,
+    @CurrentUser('userId') userId: string,
   ) {
     await this.monthlyFinancialsService.verifyCompanyAccess(companyId, userId);
     return this.monthlyFinancialsService.deletePdf(companyId, year, month);
