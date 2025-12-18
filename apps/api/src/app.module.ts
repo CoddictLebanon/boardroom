@@ -12,6 +12,8 @@ import { ResolutionsModule } from './resolutions/resolutions.module';
 import { FinancialReportsModule } from './financial-reports/financial-reports.module';
 import { GatewayModule } from './gateway/gateway.module';
 import { InvitationsModule } from './invitations/invitations.module';
+import { EmailModule } from './email/email.module';
+import { MonthlyFinancialsModule } from './monthly-financials/monthly-financials.module';
 
 @Module({
   imports: [
@@ -28,6 +30,8 @@ import { InvitationsModule } from './invitations/invitations.module';
     FinancialReportsModule,
     GatewayModule,
     InvitationsModule,
+    EmailModule,
+    MonthlyFinancialsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
