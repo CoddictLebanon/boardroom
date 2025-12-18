@@ -21,10 +21,11 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  memberships     CompanyMember[]
-  assignedActions ActionItem[]
-  uploadedDocs    Document[]
-  votes           Vote[]
+  memberships             CompanyMember[]
+  assignedActions         ActionItem[]
+  uploadedDocs            Document[]
+  votes                   Vote[]
+  notificationPreferences NotificationPreference[]
 }
 
 // Companies (workspaces)
@@ -37,14 +38,16 @@ model Company {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  members          CompanyMember[]
-  meetings         Meeting[]
-  documents        Document[]
-  folders          Folder[]
-  actionItems      ActionItem[]
-  resolutions      Resolution[]
-  financialReports FinancialReport[]
-  integrations     Integration[]
+  members                 CompanyMember[]
+  meetings                Meeting[]
+  documents               Document[]
+  folders                 Folder[]
+  actionItems             ActionItem[]
+  resolutions             Resolution[]
+  financialReports        FinancialReport[]
+  integrations            Integration[]
+  meetingTemplates        MeetingTemplate[]
+  notificationPreferences NotificationPreference[]
 }
 
 // Company membership with roles
@@ -66,6 +69,9 @@ model CompanyMember {
   meetingAttendances MeetingAttendee[]
 
   @@unique([userId, companyId])
+  @@index([userId])
+  @@index([companyId])
+  @@index([status])
 }
 
 enum MemberRole {
@@ -104,6 +110,11 @@ model Meeting {
   documents   MeetingDocument[]
   decisions   Decision[]
   summary     MeetingSummary?
+
+  @@index([companyId])
+  @@index([scheduledAt])
+  @@index([status])
+  @@index([companyId, scheduledAt])
 }
 
 enum MeetingStatus {
@@ -124,6 +135,7 @@ model MeetingAttendee {
   member  CompanyMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
   @@unique([meetingId, memberId])
+  @@index([memberId])
 }
 
 model AgendaItem {
@@ -163,6 +175,10 @@ model MeetingTemplate {
   defaultAttendees Json? // Array of member IDs
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
 }
 
 // ==========================================
@@ -231,6 +247,12 @@ model ActionItem {
   company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   assignee   User        @relation(fields: [assigneeId], references: [id])
   agendaItem AgendaItem? @relation(fields: [agendaItemId], references: [id])
+
+  @@index([companyId])
+  @@index([assigneeId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([companyId, status])
 }
 
 enum Priority {
@@ -285,6 +307,11 @@ model Document {
   versions DocumentVersion[]
   meetings MeetingDocument[]
   tags     DocumentTag[]
+
+  @@index([companyId])
+  @@index([folderId])
+  @@index([uploaderId])
+  @@index([type])
 }
 
 enum DocumentType {
@@ -459,5 +486,9 @@ model NotificationPreference {
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
   @@unique([userId, companyId])
+  @@index([userId])
 }
