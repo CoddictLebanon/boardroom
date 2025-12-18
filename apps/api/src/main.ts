@@ -7,6 +7,7 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule, {
     logger: ['error', 'warn', 'log'],
+    rawBody: true, // Enable raw body for webhook signature verification
   });
 
   // API versioning

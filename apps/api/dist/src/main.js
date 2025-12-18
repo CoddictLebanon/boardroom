@@ -7,6 +7,7 @@ async function bootstrap() {
     const logger = new common_1.Logger('Bootstrap');
     const app = await core_1.NestFactory.create(app_module_1.AppModule, {
         logger: ['error', 'warn', 'log'],
+        rawBody: true,
     });
     app.setGlobalPrefix('api/v1');
     const allowedOrigins = [
