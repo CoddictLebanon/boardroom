@@ -1,15 +1,463 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// USERS & COMPANIES
+// ==========================================
+
+// Users (synced from Clerk)
+model User {
+  id        String   @id
+  email     String   @unique
+  firstName String?
+  lastName  String?
+  imageUrl  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships     CompanyMember[]
+  assignedActions ActionItem[]
+  uploadedDocs    Document[]
+  votes           Vote[]
+}
+
+// Companies (workspaces)
+model Company {
+  id              String   @id @default(cuid())
+  name            String
+  logo            String?
+  timezone        String   @default("Asia/Dubai")
+  fiscalYearStart Int      @default(1) // Month 1-12
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  members          CompanyMember[]
+  meetings         Meeting[]
+  documents        Document[]
+  folders          Folder[]
+  actionItems      ActionItem[]
+  resolutions      Resolution[]
+  financialReports FinancialReport[]
+  integrations     Integration[]
+}
+
+// Company membership with roles
+model CompanyMember {
+  id        String       @id @default(cuid())
+  userId    String
+  companyId String
+  role      MemberRole   @default(BOARD_MEMBER)
+  title     String? // e.g., "Chairman", "CFO"
+  termStart DateTime?
+  termEnd   DateTime?
+  status    MemberStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  meetingAttendances MeetingAttendee[]
+
+  @@unique([userId, companyId])
+}
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  BOARD_MEMBER
+  OBSERVER
+}
+
+enum MemberStatus {
+  ACTIVE
+  INACTIVE
+  FORMER
+}
+
+// ==========================================
+// MEETINGS
+// ==========================================
+
+model Meeting {
+  id          String        @id @default(cuid())
+  companyId   String
+  title       String
+  description String?
+  scheduledAt DateTime
+  duration    Int // minutes
+  location    String?
+  videoLink   String?
+  status      MeetingStatus @default(SCHEDULED)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  agendaItems AgendaItem[]
+  attendees   MeetingAttendee[]
+  documents   MeetingDocument[]
+  decisions   Decision[]
+  summary     MeetingSummary?
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model MeetingAttendee {
+  id        String   @id @default(cuid())
+  meetingId String
+  memberId  String
+  isPresent Boolean?
+  createdAt DateTime @default(now())
+
+  meeting Meeting       @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  member  CompanyMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, memberId])
+}
+
+model AgendaItem {
+  id          String   @id @default(cuid())
+  meetingId   String
+  title       String
+  description String?
+  duration    Int? // minutes
+  order       Int
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  meeting   Meeting      @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  decisions Decision[]
+  actions   ActionItem[]
+}
+
+model MeetingSummary {
+  id        String    @id @default(cuid())
+  meetingId String    @unique
+  content   String // JSON or Markdown containing full summary
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+}
+
+model MeetingTemplate {
+  id               String   @id @default(cuid())
+  companyId        String
+  name             String
+  description      String?
+  defaultDuration  Int? // minutes
+  defaultAgenda    Json? // Array of agenda item templates
+  defaultAttendees Json? // Array of member IDs
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+// ==========================================
+// DECISIONS & VOTING
+// ==========================================
+
+model Decision {
+  id           String           @id @default(cuid())
+  meetingId    String
+  agendaItemId String?
+  title        String
+  description  String?
+  outcome      DecisionOutcome?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  meeting    Meeting     @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  agendaItem AgendaItem? @relation(fields: [agendaItemId], references: [id])
+  votes      Vote[]
+  resolution Resolution?
+}
+
+enum DecisionOutcome {
+  PASSED
+  REJECTED
+  TABLED
+}
+
+model Vote {
+  id         String   @id @default(cuid())
+  decisionId String
+  userId     String
+  vote       VoteType
+  createdAt  DateTime @default(now())
+
+  decision Decision @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([decisionId, userId])
+}
+
+enum VoteType {
+  FOR
+  AGAINST
+  ABSTAIN
+}
+
+// ==========================================
+// ACTION ITEMS
+// ==========================================
+
+model ActionItem {
+  id           String       @id @default(cuid())
+  companyId    String
+  meetingId    String?
+  agendaItemId String?
+  title        String
+  description  String?
+  assigneeId   String
+  dueDate      DateTime?
+  priority     Priority     @default(MEDIUM)
+  status       ActionStatus @default(PENDING)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assignee   User        @relation(fields: [assigneeId], references: [id])
+  agendaItem AgendaItem? @relation(fields: [agendaItemId], references: [id])
+}
+
+enum Priority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum ActionStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+}
+
+// ==========================================
+// DOCUMENTS
+// ==========================================
+
+model Folder {
+  id        String   @id @default(cuid())
+  companyId String
+  parentId  String?
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  parent    Folder?    @relation("FolderHierarchy", fields: [parentId], references: [id])
+  children  Folder[]   @relation("FolderHierarchy")
+  documents Document[]
+}
+
+model Document {
+  id          String       @id @default(cuid())
+  companyId   String
+  folderId    String?
+  uploaderId  String
+  name        String
+  description String?
+  type        DocumentType
+  mimeType    String?
+  size        Int?
+  storageKey  String // DigitalOcean Spaces key
+  version     Int          @default(1)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  company  Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  folder   Folder?           @relation(fields: [folderId], references: [id])
+  uploader User              @relation(fields: [uploaderId], references: [id])
+  versions DocumentVersion[]
+  meetings MeetingDocument[]
+  tags     DocumentTag[]
+}
+
+enum DocumentType {
+  MEETING
+  FINANCIAL
+  GOVERNANCE
+  GENERAL
+}
+
+model DocumentVersion {
+  id         String   @id @default(cuid())
+  documentId String
+  version    Int
+  storageKey String
+  size       Int?
+  uploaderId String
+  createdAt  DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model DocumentTag {
+  id         String @id @default(cuid())
+  documentId String
+  tag        String
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, tag])
+}
+
+model MeetingDocument {
+  id         String   @id @default(cuid())
+  meetingId  String
+  documentId String
+  isPreRead  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  meeting  Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, documentId])
+}
+
+// ==========================================
+// RESOLUTIONS
+// ==========================================
+
+model Resolution {
+  id            String             @id @default(cuid())
+  companyId     String
+  decisionId    String?            @unique
+  number        String // e.g., RES-2024-015
+  title         String
+  content       String // Full resolution text
+  category      ResolutionCategory
+  status        ResolutionStatus   @default(DRAFT)
+  effectiveDate DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  decision Decision? @relation(fields: [decisionId], references: [id])
+
+  @@index([companyId, number])
+}
+
+enum ResolutionCategory {
+  FINANCIAL
+  GOVERNANCE
+  HR
+  OPERATIONS
+  STRATEGIC
+  OTHER
+}
+
+enum ResolutionStatus {
+  DRAFT
+  PROPOSED
+  PASSED
+  REJECTED
+  TABLED
+}
+
+// ==========================================
+// FINANCIAL REPORTS
+// ==========================================
+
+model FinancialReport {
+  id         String              @id @default(cuid())
+  companyId  String
+  type       FinancialReportType
+  fiscalYear Int
+  period     String // e.g., "Q1", "January", "Annual"
+  status     ReportStatus        @default(DRAFT)
+  data       Json? // Structured financial data
+  storageKey String? // PDF/Excel file if uploaded
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, fiscalYear])
+}
+
+enum FinancialReportType {
+  PROFIT_LOSS
+  BALANCE_SHEET
+  CASH_FLOW
+  BUDGET_VS_ACTUAL
+  CUSTOM
+}
+
+enum ReportStatus {
+  DRAFT
+  FINAL
+}
+
+// ==========================================
+// INTEGRATIONS
+// ==========================================
+
+model Integration {
+  id           String            @id @default(cuid())
+  companyId    String
+  type         IntegrationType
+  provider     String // e.g., "google", "xero"
+  accessToken  String?
+  refreshToken String?
+  expiresAt    DateTime?
+  metadata     Json?
+  status       IntegrationStatus @default(DISCONNECTED)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, type, provider])
+}
+
+enum IntegrationType {
+  CALENDAR
+  STORAGE
+  ACCOUNTING
+}
+
+enum IntegrationStatus {
+  CONNECTED
+  DISCONNECTED
+  ERROR
+}
+
+// ==========================================
+// NOTIFICATIONS
+// ==========================================
+
+model NotificationPreference {
+  id                   String   @id @default(cuid())
+  userId               String
+  companyId            String?
+  meetingScheduled     Boolean  @default(true)
+  meetingReminder      Boolean  @default(true)
+  meetingSummary       Boolean  @default(true)
+  actionItemAssigned   Boolean  @default(true)
+  actionItemDue        Boolean  @default(true)
+  actionItemOverdue    Boolean  @default(true)
+  documentShared       Boolean  @default(true)
+  resolutionPassed     Boolean  @default(true)
+  digestFrequency      String   @default("immediate") // immediate, daily, weekly
+  quietHoursStart      String? // e.g., "22:00"
+  quietHoursEnd        String? // e.g., "08:00"
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@unique([userId, companyId])
 }
