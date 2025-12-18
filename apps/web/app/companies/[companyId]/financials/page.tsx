@@ -67,6 +67,21 @@ export default function FinancialsPage() {
   const [editValue, setEditValue] = useState("");
   const [uploadingMonth, setUploadingMonth] = useState<number | null>(null);
 
+  // Generate empty month data as fallback
+  const getEmptyMonthsData = useCallback((): MonthlyData[] => {
+    return Array.from({ length: 12 }, (_, i) => ({
+      id: null,
+      companyId,
+      year: selectedYear,
+      month: i + 1,
+      revenue: null,
+      cost: null,
+      profit: null,
+      pdfPath: null,
+      notes: null,
+    }));
+  }, [companyId, selectedYear]);
+
   const fetchData = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -79,14 +94,24 @@ export default function FinancialsPage() {
       );
       if (response.ok) {
         const data = await response.json();
-        setMonthlyData(data);
+        // Ensure we always have 12 months of data
+        if (Array.isArray(data) && data.length === 12) {
+          setMonthlyData(data);
+        } else {
+          setMonthlyData(getEmptyMonthsData());
+        }
+      } else {
+        // If API fails, show empty rows so user can still enter data
+        setMonthlyData(getEmptyMonthsData());
       }
     } catch (error) {
       console.error("Error fetching financial data:", error);
+      // On error, show empty rows so user can still enter data
+      setMonthlyData(getEmptyMonthsData());
     } finally {
       setIsLoading(false);
     }
-  }, [companyId, selectedYear, getToken]);
+  }, [companyId, selectedYear, getToken, getEmptyMonthsData]);
 
   useEffect(() => {
     fetchData();
