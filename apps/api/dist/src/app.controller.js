@@ -21,7 +21,7 @@ let AppController = class AppController {
     getHealth() {
         return {
             status: 'ok',
-            message: 'BoardMeeting API is running',
+            message: 'Boardroom API is running',
             timestamp: new Date().toISOString(),
         };
     }

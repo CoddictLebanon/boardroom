@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BoardMeeting - Board Meeting Management",
+  title: "Boardroom - Board Meeting Management",
   description: "Comprehensive board meeting management platform",
 };
 
