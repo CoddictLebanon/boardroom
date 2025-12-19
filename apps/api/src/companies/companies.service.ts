@@ -23,6 +23,7 @@ export class CompaniesService {
 
   /**
    * Create a new company with the creator as OWNER
+   * Only users who are already owners of at least one company can create new companies
    */
   async create(userId: string, createCompanyDto: CreateCompanyDto) {
     this.logger.log(`Creating company for user ${userId}: ${createCompanyDto.name}`);
@@ -37,6 +38,26 @@ export class CompaniesService {
     if (!user) {
       this.logger.error(`User not found: ${userId}`);
       throw new BadRequestException('User not found');
+    }
+
+    // Check if user is already an owner of at least one company
+    // Exception: Allow creating the first company in the system (bootstrap case)
+    const existingOwnership = await this.prisma.companyMember.findFirst({
+      where: {
+        userId,
+        role: MemberRole.OWNER,
+        status: MemberStatus.ACTIVE,
+      },
+    });
+
+    if (!existingOwnership) {
+      // Check if this is a bootstrap case (no companies exist yet)
+      const totalCompanies = await this.prisma.company.count();
+      if (totalCompanies > 0) {
+        this.logger.warn(`User ${userId} is not an owner of any company, cannot create new companies`);
+        throw new ForbiddenException('Only owners can create new companies. Please contact an administrator.');
+      }
+      this.logger.log(`Bootstrap case: allowing first company creation for user ${userId}`);
     }
 
     // Create company and add creator as owner in a transaction
@@ -462,5 +483,110 @@ export class CompaniesService {
     }
 
     return membership;
+  }
+
+  /**
+   * Get dashboard statistics for a company
+   */
+  async getDashboardStats(companyId: string, userId: string) {
+    // Verify user is a member
+    const membership = await this.getUserMembership(companyId, userId);
+    if (!membership) {
+      throw new ForbiddenException('You are not a member of this company');
+    }
+
+    const now = new Date();
+
+    // Get all stats in parallel
+    const [
+      upcomingMeetingsCount,
+      openActionItemsCount,
+      pendingResolutionsCount,
+      boardMembersCount,
+      upcomingMeetings,
+      userActionItems,
+    ] = await Promise.all([
+      // Upcoming meetings count
+      this.prisma.meeting.count({
+        where: {
+          companyId,
+          status: 'SCHEDULED',
+          scheduledAt: { gte: now },
+        },
+      }),
+      // Open action items count
+      this.prisma.actionItem.count({
+        where: {
+          companyId,
+          status: { in: ['PENDING', 'IN_PROGRESS'] },
+        },
+      }),
+      // Pending resolutions count
+      this.prisma.resolution.count({
+        where: {
+          companyId,
+          status: { in: ['DRAFT', 'PROPOSED'] },
+        },
+      }),
+      // Board members count
+      this.prisma.companyMember.count({
+        where: {
+          companyId,
+          status: MemberStatus.ACTIVE,
+        },
+      }),
+      // Upcoming meetings list (next 5)
+      this.prisma.meeting.findMany({
+        where: {
+          companyId,
+          status: 'SCHEDULED',
+          scheduledAt: { gte: now },
+        },
+        orderBy: { scheduledAt: 'asc' },
+        take: 5,
+        include: {
+          attendees: {
+            include: {
+              member: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      firstName: true,
+                      lastName: true,
+                      imageUrl: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      }),
+      // User's action items (assigned to them)
+      this.prisma.actionItem.findMany({
+        where: {
+          companyId,
+          assigneeId: userId,
+          status: { in: ['PENDING', 'IN_PROGRESS'] },
+        },
+        orderBy: [
+          { dueDate: 'asc' },
+          { priority: 'desc' },
+        ],
+        take: 5,
+      }),
+    ]);
+
+    return {
+      stats: {
+        upcomingMeetings: upcomingMeetingsCount,
+        openActionItems: openActionItemsCount,
+        pendingResolutions: pendingResolutionsCount,
+        boardMembers: boardMembersCount,
+      },
+      upcomingMeetings,
+      userActionItems,
+    };
   }
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import {
   Calendar,
   CheckSquare,
@@ -16,35 +16,39 @@ import {
 } from "lucide-react";
 import { Command } from "cmdk";
 
-const groups = [
+const getNavigationGroups = (companyId: string) => [
   {
     heading: "Navigation",
     items: [
-      { name: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
-      { name: "Meetings", icon: Calendar, href: "/meetings" },
-      { name: "Action Items", icon: CheckSquare, href: "/action-items" },
-      { name: "Resolutions", icon: Vote, href: "/resolutions" },
-      { name: "Documents", icon: FileText, href: "/documents" },
-      { name: "Financials", icon: DollarSign, href: "/financials" },
-      { name: "Board Members", icon: Users, href: "/members" },
-      { name: "Settings", icon: Settings, href: "/settings" },
+      { name: "Dashboard", icon: LayoutDashboard, href: `/companies/${companyId}/dashboard` },
+      { name: "Meetings", icon: Calendar, href: `/companies/${companyId}/meetings` },
+      { name: "Action Items", icon: CheckSquare, href: `/companies/${companyId}/action-items` },
+      { name: "Resolutions", icon: Vote, href: `/companies/${companyId}/resolutions` },
+      { name: "Documents", icon: FileText, href: `/companies/${companyId}/documents` },
+      { name: "Financials", icon: DollarSign, href: `/companies/${companyId}/financials` },
+      { name: "Board Members", icon: Users, href: `/companies/${companyId}/members` },
+      { name: "Settings", icon: Settings, href: `/companies/${companyId}/settings` },
     ],
   },
   {
     heading: "Quick Actions",
     items: [
-      { name: "New Meeting", icon: Plus, href: "/meetings/new" },
-      { name: "New Action Item", icon: Plus, href: "/action-items/new" },
-      { name: "New Resolution", icon: Plus, href: "/resolutions/new" },
-      { name: "Upload Document", icon: Plus, href: "/documents/upload" },
+      { name: "New Meeting", icon: Plus, href: `/companies/${companyId}/meetings/new` },
     ],
   },
 ];
 
 export function CommandPalette() {
   const router = useRouter();
+  const params = useParams();
+  const companyId = params.companyId as string;
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
+
+  const groups = React.useMemo(
+    () => (companyId ? getNavigationGroups(companyId) : []),
+    [companyId]
+  );
 
   React.useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -65,6 +69,8 @@ export function CommandPalette() {
     },
     []
   );
+
+  if (!companyId) return null;
 
   return (
     <>

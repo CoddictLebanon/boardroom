@@ -62,6 +62,18 @@ export class CompaniesController {
   }
 
   /**
+   * Get dashboard statistics for a company
+   * GET /companies/:id/dashboard
+   */
+  @Get(':id/dashboard')
+  async getDashboardStats(
+    @Param('id') companyId: string,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.companiesService.getDashboardStats(companyId, userId);
+  }
+
+  /**
    * Update a company
    * PUT /companies/:id
    */

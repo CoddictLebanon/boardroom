@@ -137,11 +137,72 @@ export class MeetingsController {
     return this.meetingsService.castVote(id, decisionId, userId, castVoteDto);
   }
 
+  @Post('meetings/:id/decisions/:decisionId/votes')
+  async castVoteAlternate(
+    @Param('id') id: string,
+    @Param('decisionId') decisionId: string,
+    @Body() castVoteDto: CastVoteDto,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.meetingsService.castVote(id, decisionId, userId, castVoteDto);
+  }
+
+  @Put('meetings/:id/decisions/:decisionId')
+  async updateDecision(
+    @Param('id') id: string,
+    @Param('decisionId') decisionId: string,
+    @Body() updateDecisionDto: { outcome: 'PASSED' | 'REJECTED' | 'TABLED' },
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.meetingsService.updateDecision(id, decisionId, userId, updateDecisionDto);
+  }
+
+  @Post('meetings/:id/start')
+  async startMeeting(
+    @Param('id') id: string,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.meetingsService.startMeeting(id, userId);
+  }
+
+  @Post('meetings/:id/pause')
+  async pauseMeeting(
+    @Param('id') id: string,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.meetingsService.pauseMeeting(id, userId);
+  }
+
+  @Post('meetings/:id/resume')
+  async resumeMeeting(
+    @Param('id') id: string,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.meetingsService.resumeMeeting(id, userId);
+  }
+
+  @Post('meetings/:id/end')
+  async endMeeting(
+    @Param('id') id: string,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.meetingsService.completeMeeting(id, userId);
+  }
+
   @Post('meetings/:id/complete')
   async completeMeeting(
     @Param('id') id: string,
     @CurrentUser('userId') userId: string,
   ) {
     return this.meetingsService.completeMeeting(id, userId);
+  }
+
+  @Put('meetings/:id/notes')
+  async updateMeetingNotes(
+    @Param('id') id: string,
+    @Body() body: { notes: string },
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.meetingsService.updateMeetingNotes(id, userId, body.notes);
   }
 }

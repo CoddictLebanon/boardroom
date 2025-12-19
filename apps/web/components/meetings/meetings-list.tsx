@@ -3,7 +3,7 @@
 import { MeetingCard } from "./meeting-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMeetings, useMeetingMutations } from "@/lib/hooks/use-meetings";
-import { useCurrentCompany } from "@/lib/hooks/use-current-company";
+import { useParams } from "next/navigation";
 import { Calendar, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -14,7 +14,8 @@ interface MeetingsListProps {
 }
 
 export function MeetingsList({ upcoming, past }: MeetingsListProps) {
-  const { currentCompany } = useCurrentCompany();
+  const params = useParams();
+  const companyId = params.companyId as string;
   const { meetings, isLoading, error, refetch } = useMeetings({ upcoming, past });
   const { cancelMeeting } = useMeetingMutations();
 
@@ -26,18 +27,6 @@ export function MeetingsList({ upcoming, past }: MeetingsListProps) {
       }
     }
   };
-
-  if (!currentCompany) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <Calendar className="h-12 w-12 text-muted-foreground/50" />
-        <h3 className="mt-4 text-lg font-semibold">No company selected</h3>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Please select a company from the sidebar to view meetings.
-        </p>
-      </div>
-    );
-  }
 
   if (isLoading) {
     return (
@@ -74,7 +63,9 @@ export function MeetingsList({ upcoming, past }: MeetingsListProps) {
   if (meetings.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
-        <Calendar className="h-12 w-12 text-muted-foreground/50" />
+        <div className="rounded-full bg-blue-50 p-4">
+          <Calendar className="h-10 w-10 text-blue-400" />
+        </div>
         <h3 className="mt-4 text-lg font-semibold">
           {upcoming ? "No upcoming meetings" : past ? "No past meetings" : "No meetings yet"}
         </h3>
@@ -87,7 +78,7 @@ export function MeetingsList({ upcoming, past }: MeetingsListProps) {
         </p>
         {(upcoming || (!upcoming && !past)) && (
           <Button className="mt-4" asChild>
-            <Link href="/meetings/new">
+            <Link href={`/companies/${companyId}/meetings/new`}>
               <Plus className="mr-2 h-4 w-4" />
               Schedule Meeting
             </Link>
@@ -100,7 +91,7 @@ export function MeetingsList({ upcoming, past }: MeetingsListProps) {
   return (
     <div className="space-y-4">
       {meetings.map((meeting) => (
-        <MeetingCard key={meeting.id} meeting={meeting} onCancel={handleCancel} />
+        <MeetingCard key={meeting.id} meeting={meeting} companyId={companyId} onCancel={handleCancel} />
       ))}
     </div>
   );

@@ -1,5 +1,5 @@
 // Meeting Types
-export type MeetingStatus = "SCHEDULED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+export type MeetingStatus = "SCHEDULED" | "IN_PROGRESS" | "PAUSED" | "COMPLETED" | "CANCELLED";
 
 export interface Company {
   id: string;
@@ -17,6 +17,9 @@ export interface Meeting {
   location: string | null;
   videoLink: string | null;
   status: MeetingStatus;
+  notes: string | null;
+  startedAt: string | null;
+  endedAt: string | null;
   createdAt: string;
   updatedAt: string;
   company?: Company;
@@ -42,6 +45,8 @@ export interface AgendaItem {
   duration: number | null;
   order: number;
   notes: string | null;
+  createdById: string | null;
+  createdBy?: User;
 }
 
 export interface MeetingAttendee {
@@ -78,10 +83,12 @@ export interface Decision {
   id: string;
   meetingId: string;
   agendaItemId: string | null;
+  createdById: string | null;
   title: string;
   description: string | null;
   outcome: DecisionOutcome | null;
   votes?: Vote[];
+  createdBy?: User;
 }
 
 export interface Vote {
@@ -100,13 +107,15 @@ export interface ActionItem {
   companyId: string;
   meetingId: string | null;
   agendaItemId: string | null;
+  createdById: string | null;
   title: string;
   description: string | null;
-  assigneeId: string;
+  assigneeId: string | null;
   dueDate: string | null;
   priority: Priority;
   status: ActionStatus;
   assignee?: User;
+  createdBy?: User;
 }
 
 // Resolution Types

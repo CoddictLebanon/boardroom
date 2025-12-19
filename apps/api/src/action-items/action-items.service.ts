@@ -22,6 +22,7 @@ export class ActionItemsService {
         title: dto.title,
         description: dto.description,
         assigneeId: dto.assigneeId,
+        createdById: userId,
         dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
         priority: dto.priority || Priority.MEDIUM,
         status: dto.status || ActionStatus.PENDING,
@@ -30,6 +31,15 @@ export class ActionItemsService {
       },
       include: {
         assignee: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            imageUrl: true,
+          },
+        },
+        createdBy: {
           select: {
             id: true,
             email: true,
@@ -100,6 +110,15 @@ export class ActionItemsService {
             imageUrl: true,
           },
         },
+        createdBy: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            imageUrl: true,
+          },
+        },
         company: {
           select: {
             id: true,
@@ -138,6 +157,15 @@ export class ActionItemsService {
             imageUrl: true,
           },
         },
+        createdBy: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            imageUrl: true,
+          },
+        },
         company: {
           select: {
             id: true,
@@ -163,6 +191,15 @@ export class ActionItemsService {
       where: { id },
       include: {
         assignee: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            imageUrl: true,
+          },
+        },
+        createdBy: {
           select: {
             id: true,
             email: true,
@@ -236,6 +273,15 @@ export class ActionItemsService {
             imageUrl: true,
           },
         },
+        createdBy: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            imageUrl: true,
+          },
+        },
         company: {
           select: {
             id: true,
@@ -265,6 +311,15 @@ export class ActionItemsService {
       },
       include: {
         assignee: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            imageUrl: true,
+          },
+        },
+        createdBy: {
           select: {
             id: true,
             email: true,

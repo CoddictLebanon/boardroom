@@ -46,4 +46,14 @@ export class InvitationsController {
   ) {
     return this.invitationsService.revokeInvitation(id, userId);
   }
+
+  @Post('invitations/:token/accept')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Accept an invitation by token' })
+  acceptInvitation(
+    @Param('token') token: string,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.invitationsService.acceptInvitationByToken(token, userId);
+  }
 }

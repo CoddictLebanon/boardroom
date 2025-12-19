@@ -5,6 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../email/email.service';
 import {
   CreateMeetingDto,
   UpdateMeetingDto,
@@ -19,7 +20,10 @@ import { MeetingStatus, DecisionOutcome } from '@prisma/client';
 
 @Injectable()
 export class MeetingsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private emailService: EmailService,
+  ) {}
 
   async createMeeting(companyId: string, userId: string, dto: CreateMeetingDto) {
     // Verify user is a member of the company
@@ -156,6 +160,14 @@ export class MeetingsService {
             order: 'asc',
           },
           include: {
+            createdBy: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                imageUrl: true,
+              },
+            },
             decisions: {
               include: {
                 votes: {
@@ -180,6 +192,14 @@ export class MeetingsService {
               },
             },
             agendaItem: true,
+            createdBy: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                imageUrl: true,
+              },
+            },
           },
         },
         documents: {
@@ -294,6 +314,17 @@ export class MeetingsService {
         description: dto.description,
         duration: dto.duration,
         order: (maxOrder?.order || 0) + 1,
+        createdById: userId,
+      },
+      include: {
+        createdBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            imageUrl: true,
+          },
+        },
       },
     });
 
@@ -356,6 +387,9 @@ export class MeetingsService {
       throw new BadRequestException('One or more members not found in company');
     }
 
+    // Auto-mark as present if meeting is in progress or paused
+    const isPresent = meeting.status === MeetingStatus.IN_PROGRESS || meeting.status === MeetingStatus.PAUSED;
+
     // Create attendees (skip duplicates)
     const attendees = await Promise.all(
       dto.memberIds.map(async (memberId) => {
@@ -369,6 +403,7 @@ export class MeetingsService {
           create: {
             meetingId,
             memberId,
+            isPresent,
           },
           update: {},
           include: {
@@ -447,6 +482,7 @@ export class MeetingsService {
       data: {
         meetingId,
         agendaItemId: dto.agendaItemId,
+        createdById: userId,
         title: dto.title,
         description: dto.description,
       },
@@ -457,6 +493,14 @@ export class MeetingsService {
           },
         },
         agendaItem: true,
+        createdBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            imageUrl: true,
+          },
+        },
       },
     });
 
@@ -521,6 +565,171 @@ export class MeetingsService {
     return vote;
   }
 
+  async startMeeting(meetingId: string, userId: string) {
+    const meeting = await this.getMeeting(meetingId, userId);
+
+    if (meeting.status === MeetingStatus.COMPLETED) {
+      throw new BadRequestException('Cannot start a completed meeting');
+    }
+
+    if (meeting.status === MeetingStatus.CANCELLED) {
+      throw new BadRequestException('Cannot start a cancelled meeting');
+    }
+
+    if (meeting.status === MeetingStatus.IN_PROGRESS) {
+      throw new BadRequestException('Meeting is already in progress');
+    }
+
+    // Auto-mark all attendees as present when meeting starts
+    await this.prisma.meetingAttendee.updateMany({
+      where: { meetingId },
+      data: { isPresent: true },
+    });
+
+    const updated = await this.prisma.meeting.update({
+      where: { id: meetingId },
+      data: {
+        status: MeetingStatus.IN_PROGRESS,
+        startedAt: new Date(),
+      },
+      include: {
+        attendees: {
+          include: {
+            member: {
+              include: {
+                user: true,
+              },
+            },
+          },
+        },
+        agendaItems: {
+          orderBy: {
+            order: 'asc',
+          },
+        },
+      },
+    });
+
+    return updated;
+  }
+
+  async pauseMeeting(meetingId: string, userId: string) {
+    const meeting = await this.getMeeting(meetingId, userId);
+
+    if (meeting.status !== MeetingStatus.IN_PROGRESS) {
+      throw new BadRequestException('Only in-progress meetings can be paused');
+    }
+
+    const updated = await this.prisma.meeting.update({
+      where: { id: meetingId },
+      data: {
+        status: MeetingStatus.PAUSED,
+      },
+      include: {
+        attendees: {
+          include: {
+            member: {
+              include: {
+                user: true,
+              },
+            },
+          },
+        },
+        agendaItems: {
+          orderBy: {
+            order: 'asc',
+          },
+        },
+      },
+    });
+
+    return updated;
+  }
+
+  async resumeMeeting(meetingId: string, userId: string) {
+    const meeting = await this.getMeeting(meetingId, userId);
+
+    if (meeting.status !== MeetingStatus.PAUSED) {
+      throw new BadRequestException('Only paused meetings can be resumed');
+    }
+
+    const updated = await this.prisma.meeting.update({
+      where: { id: meetingId },
+      data: {
+        status: MeetingStatus.IN_PROGRESS,
+      },
+      include: {
+        attendees: {
+          include: {
+            member: {
+              include: {
+                user: true,
+              },
+            },
+          },
+        },
+        agendaItems: {
+          orderBy: {
+            order: 'asc',
+          },
+        },
+      },
+    });
+
+    return updated;
+  }
+
+  async updateMeetingNotes(meetingId: string, userId: string, notes: string) {
+    const meeting = await this.getMeeting(meetingId, userId);
+
+    const updated = await this.prisma.meeting.update({
+      where: { id: meetingId },
+      data: {
+        notes,
+      },
+    });
+
+    return updated;
+  }
+
+  async updateDecision(
+    meetingId: string,
+    decisionId: string,
+    userId: string,
+    dto: { outcome: 'PASSED' | 'REJECTED' | 'TABLED' },
+  ) {
+    const meeting = await this.getMeeting(meetingId, userId);
+
+    // Verify decision belongs to meeting
+    const decision = await this.prisma.decision.findFirst({
+      where: {
+        id: decisionId,
+        meetingId,
+      },
+    });
+
+    if (!decision) {
+      throw new NotFoundException('Decision not found');
+    }
+
+    const updated = await this.prisma.decision.update({
+      where: { id: decisionId },
+      data: {
+        outcome: dto.outcome as DecisionOutcome,
+      },
+      include: {
+        votes: {
+          include: {
+            user: true,
+          },
+        },
+        agendaItem: true,
+      },
+    });
+
+    return updated;
+  }
+
   async completeMeeting(meetingId: string, userId: string) {
     const meeting = await this.getMeeting(meetingId, userId);
 
@@ -570,6 +779,7 @@ export class MeetingsService {
       where: { id: meetingId },
       data: {
         status: MeetingStatus.COMPLETED,
+        endedAt: new Date(),
         summary: {
           create: {
             content: summary,
@@ -577,6 +787,7 @@ export class MeetingsService {
         },
       },
       include: {
+        company: true,
         attendees: {
           include: {
             member: {
@@ -604,7 +815,39 @@ export class MeetingsService {
       },
     });
 
+    // Send email summary to all attendees
+    await this.sendMeetingSummaryEmails(updated, summary);
+
     return updated;
+  }
+
+  private async sendMeetingSummaryEmails(meeting: any, summaryJson: string) {
+    const summary = JSON.parse(summaryJson);
+
+    // Get all attendee emails
+    const attendeeEmails = meeting.attendees
+      .filter((a: any) => a.member?.user?.email)
+      .map((a: any) => a.member.user.email);
+
+    if (attendeeEmails.length === 0) return;
+
+    // Send email to each attendee
+    for (const email of attendeeEmails) {
+      try {
+        await this.emailService.sendMeetingSummaryEmail({
+          to: email,
+          meetingTitle: meeting.title,
+          companyName: meeting.company.name,
+          scheduledAt: meeting.scheduledAt,
+          attendees: summary.attendees,
+          agendaItems: summary.agendaItems,
+          decisions: summary.decisions,
+          notes: meeting.notes,
+        });
+      } catch (error) {
+        console.error(`Failed to send summary email to ${email}:`, error);
+      }
+    }
   }
 
   private async generateMeetingSummary(meeting: any): Promise<string> {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { useCurrentCompany } from "./use-current-company";
+import { useParams } from "next/navigation";
 import type { Meeting, MeetingStatus } from "@/lib/types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
@@ -15,24 +15,25 @@ interface UseMeetingsOptions {
 
 export function useMeetings(options: UseMeetingsOptions = {}) {
   const { getToken, isLoaded } = useAuth();
-  const { currentCompany } = useCurrentCompany();
+  const params = useParams();
+  const companyId = params.companyId as string;
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchMeetings = useCallback(async () => {
-    if (!isLoaded || !currentCompany) return;
+    if (!isLoaded || !companyId) return;
 
     try {
       setIsLoading(true);
       const token = await getToken();
 
-      const params = new URLSearchParams();
-      if (options.status) params.append("status", options.status);
-      if (options.upcoming) params.append("upcoming", "true");
-      if (options.past) params.append("past", "true");
+      const queryParams = new URLSearchParams();
+      if (options.status) queryParams.append("status", options.status);
+      if (options.upcoming) queryParams.append("upcoming", "true");
+      if (options.past) queryParams.append("past", "true");
 
-      const url = `${API_URL}/companies/${currentCompany.id}/meetings${params.toString() ? `?${params}` : ""}`;
+      const url = `${API_URL}/companies/${companyId}/meetings${queryParams.toString() ? `?${queryParams}` : ""}`;
 
       const response = await fetch(url, {
         headers: {
@@ -52,7 +53,7 @@ export function useMeetings(options: UseMeetingsOptions = {}) {
     } finally {
       setIsLoading(false);
     }
-  }, [getToken, isLoaded, currentCompany, options.status, options.upcoming, options.past]);
+  }, [getToken, isLoaded, companyId, options.status, options.upcoming, options.past]);
 
   useEffect(() => {
     fetchMeetings();
@@ -112,13 +113,14 @@ interface CreateMeetingData {
 
 export function useMeetingMutations() {
   const { getToken } = useAuth();
-  const { currentCompany } = useCurrentCompany();
+  const params = useParams();
+  const companyId = params.companyId as string;
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const createMeeting = useCallback(
     async (data: CreateMeetingData): Promise<Meeting | null> => {
-      if (!currentCompany) {
+      if (!companyId) {
         setError("No company selected");
         return null;
       }
@@ -128,7 +130,7 @@ export function useMeetingMutations() {
         setError(null);
         const token = await getToken();
 
-        const response = await fetch(`${API_URL}/companies/${currentCompany.id}/meetings`, {
+        const response = await fetch(`${API_URL}/companies/${companyId}/meetings`, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -151,7 +153,7 @@ export function useMeetingMutations() {
         setIsLoading(false);
       }
     },
-    [getToken, currentCompany]
+    [getToken, companyId]
   );
 
   const updateMeeting = useCallback(

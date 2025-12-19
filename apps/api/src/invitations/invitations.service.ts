@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
+import { EmailService } from '../email/email.service';
 import { MemberRole, MemberStatus, InvitationStatus, CompanyMember } from '@prisma/client';
 import { CreateInvitationDto } from './dto';
 
@@ -17,6 +18,7 @@ export class InvitationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    private readonly emailService: EmailService,
   ) {}
 
   async createInvitation(
@@ -101,6 +103,19 @@ export class InvitationsService {
 
     this.logger.log(`Invitation created for ${dto.email} to company ${companyId}`);
 
+    // Send invitation email
+    const inviterName = invitation.inviter
+      ? `${invitation.inviter.firstName || ''} ${invitation.inviter.lastName || ''}`.trim() || invitation.inviter.email
+      : 'A team member';
+
+    await this.emailService.sendInvitationEmail({
+      to: dto.email,
+      inviterName,
+      companyName: invitation.company.name,
+      role: invitation.role,
+      invitationToken: invitation.id,
+    });
+
     return invitation;
   }
 
@@ -152,6 +167,62 @@ export class InvitationsService {
       where: { id: invitationId },
       data: { status: InvitationStatus.REVOKED },
     });
+  }
+
+  async acceptInvitationByToken(token: string, userId: string) {
+    const invitation = await this.prisma.invitation.findUnique({
+      where: { id: token },
+      include: { company: { select: { id: true, name: true } } },
+    });
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    if (invitation.status !== InvitationStatus.PENDING) {
+      throw new ConflictException(`Invitation has already been ${invitation.status.toLowerCase()}`);
+    }
+
+    if (invitation.expiresAt < new Date()) {
+      throw new ConflictException('Invitation has expired');
+    }
+
+    // Check if user is already a member
+    const existingMember = await this.prisma.companyMember.findUnique({
+      where: {
+        userId_companyId: { userId, companyId: invitation.companyId },
+      },
+    });
+
+    if (existingMember) {
+      throw new ConflictException('You are already a member of this company');
+    }
+
+    // Create company membership
+    const member = await this.prisma.companyMember.create({
+      data: {
+        userId,
+        companyId: invitation.companyId,
+        role: invitation.role,
+        title: invitation.title,
+        status: MemberStatus.ACTIVE,
+      },
+    });
+
+    // Mark invitation as accepted
+    await this.prisma.invitation.update({
+      where: { id: invitation.id },
+      data: { status: InvitationStatus.ACCEPTED },
+    });
+
+    this.logger.log(
+      `User ${userId} accepted invitation ${token} to company ${invitation.companyId}`,
+    );
+
+    return {
+      member,
+      company: invitation.company,
+    };
   }
 
   async acceptInvitationByEmail(email: string, userId: string) {
