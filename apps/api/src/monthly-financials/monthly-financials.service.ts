@@ -65,7 +65,7 @@ export class MonthlyFinancialsService {
 
     const profit = dto.revenue - dto.cost;
 
-    return this.prisma.monthlyFinancial.upsert({
+    const record = await this.prisma.monthlyFinancial.upsert({
       where: {
         companyId_year_month: { companyId, year, month },
       },
@@ -85,6 +85,14 @@ export class MonthlyFinancialsService {
         notes: dto.notes,
       },
     });
+
+    // Convert Decimal to number for JSON serialization
+    return {
+      ...record,
+      revenue: Number(record.revenue),
+      cost: Number(record.cost),
+      profit: Number(record.profit),
+    };
   }
 
   async savePdf(
