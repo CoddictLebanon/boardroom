@@ -75,9 +75,19 @@ export class ClerkAuthGuard implements CanActivate, OnModuleInit {
     try {
       // Verify the JWT token with Clerk
       // Get the issuer from the token to properly verify
+      // Build authorized parties list from environment
+      const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+      const authorizedParties = [
+        'http://localhost:3000',
+        'http://localhost:3001',
+      ];
+      if (frontendUrl) {
+        authorizedParties.push(frontendUrl);
+      }
+
       const verifiedToken = await verifyToken(token, {
         secretKey: this.secretKey,
-        authorizedParties: ['http://localhost:3000', 'http://localhost:3001'],
+        authorizedParties,
       });
 
       // Attach user info to request
