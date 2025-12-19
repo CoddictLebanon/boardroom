@@ -62,7 +62,8 @@ export default function FinancialsPage() {
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [viewMode, setViewMode] = useState<"monthly" | "quarterly">("monthly");
   const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [editingCell, setEditingCell] = useState<{ month: number; field: "revenue" | "cost" } | null>(null);
   const [editValue, setEditValue] = useState("");
   const [uploadingMonth, setUploadingMonth] = useState<number | null>(null);
@@ -82,9 +83,9 @@ export default function FinancialsPage() {
     }));
   }, [companyId, selectedYear]);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (showLoading = true) => {
     try {
-      setIsLoading(true);
+      if (showLoading) setIsInitialLoading(true);
       const token = await getToken();
       const response = await fetch(
         `${API_URL}/companies/${companyId}/monthly-financials?year=${selectedYear}`,
@@ -109,7 +110,7 @@ export default function FinancialsPage() {
       // On error, show empty rows so user can still enter data
       setMonthlyData(getEmptyMonthsData());
     } finally {
-      setIsLoading(false);
+      if (showLoading) setIsInitialLoading(false);
     }
   }, [companyId, selectedYear, getToken, getEmptyMonthsData]);
 
@@ -123,10 +124,22 @@ export default function FinancialsPage() {
 
     const revenue = field === "revenue" ? numValue : (currentMonthData?.revenue || 0);
     const cost = field === "cost" ? numValue : (currentMonthData?.cost || 0);
+    const profit = revenue - cost;
 
+    // Optimistic update - update local state immediately
+    setMonthlyData((prev) =>
+      prev.map((m) =>
+        m.month === month ? { ...m, revenue, cost, profit } : m
+      )
+    );
+    setEditingCell(null);
+    setEditValue("");
+
+    // Then sync with server in background (no loading state)
     try {
+      setIsSaving(true);
       const token = await getToken();
-      await fetch(
+      const response = await fetch(
         `${API_URL}/companies/${companyId}/monthly-financials/${selectedYear}/${month}`,
         {
           method: "PUT",
@@ -137,12 +150,23 @@ export default function FinancialsPage() {
           body: JSON.stringify({ revenue, cost }),
         }
       );
-      await fetchData();
+
+      // If server returns updated data, use it (in case profit calculation differs)
+      if (response.ok) {
+        const savedData = await response.json();
+        setMonthlyData((prev) =>
+          prev.map((m) =>
+            m.month === month ? { ...m, ...savedData } : m
+          )
+        );
+      }
     } catch (error) {
       console.error("Error saving data:", error);
+      // On error, refetch to restore correct state
+      await fetchData(false);
+    } finally {
+      setIsSaving(false);
     }
-    setEditingCell(null);
-    setEditValue("");
   };
 
   const handlePdfUpload = async (month: number, file: File) => {
@@ -152,7 +176,7 @@ export default function FinancialsPage() {
       const formData = new FormData();
       formData.append("file", file);
 
-      await fetch(
+      const response = await fetch(
         `${API_URL}/companies/${companyId}/monthly-financials/${selectedYear}/${month}/pdf`,
         {
           method: "POST",
@@ -160,7 +184,16 @@ export default function FinancialsPage() {
           body: formData,
         }
       );
-      await fetchData();
+
+      // Optimistic update for PDF path
+      if (response.ok) {
+        const data = await response.json();
+        setMonthlyData((prev) =>
+          prev.map((m) =>
+            m.month === month ? { ...m, pdfPath: data.pdfPath } : m
+          )
+        );
+      }
     } catch (error) {
       console.error("Error uploading PDF:", error);
     } finally {
@@ -193,6 +226,14 @@ export default function FinancialsPage() {
 
   const handlePdfDelete = async (month: number) => {
     if (!confirm("Delete this PDF?")) return;
+
+    // Optimistic update - remove PDF path immediately
+    setMonthlyData((prev) =>
+      prev.map((m) =>
+        m.month === month ? { ...m, pdfPath: null } : m
+      )
+    );
+
     try {
       const token = await getToken();
       await fetch(
@@ -202,9 +243,10 @@ export default function FinancialsPage() {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-      await fetchData();
     } catch (error) {
       console.error("Error deleting PDF:", error);
+      // On error, refetch to restore correct state
+      await fetchData(false);
     }
   };
 
@@ -327,7 +369,7 @@ export default function FinancialsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
+          {isInitialLoading ? (
             <div className="flex items-center justify-center h-[300px]">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
@@ -354,7 +396,7 @@ export default function FinancialsPage() {
           <CardDescription>Click any cell to edit. Profit is calculated automatically.</CardDescription>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
+          {isInitialLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>

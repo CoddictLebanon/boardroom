@@ -73,7 +73,7 @@ export default function MembersPage() {
 
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   const resetForm = () => {
     setEmail("");
@@ -81,9 +81,9 @@ export default function MembersPage() {
     setTitle("");
   };
 
-  const fetchData = async () => {
+  const fetchData = async (showLoading = true) => {
     try {
-      setIsLoading(true);
+      if (showLoading) setIsInitialLoading(true);
       const token = await getToken();
 
       const [companyRes, invitationsRes] = await Promise.all([
@@ -107,7 +107,7 @@ export default function MembersPage() {
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
-      setIsLoading(false);
+      if (showLoading) setIsInitialLoading(false);
     }
   };
 
@@ -143,12 +143,19 @@ export default function MembersPage() {
         throw new Error(error.message || "Failed to send invitation");
       }
 
-      await fetchData();
+      // Optimistic update - add invitation to list immediately
+      const newInvitation = await response.json();
+      setInvitations((prev) => [...prev, newInvitation]);
+
       resetForm();
       setDialogOpen(false);
+
+      // Background refresh
+      fetchData(false);
     } catch (error) {
       console.error("Error sending invitation:", error);
       alert(error instanceof Error ? error.message : "Failed to send invitation");
+      fetchData(false);
     } finally {
       setIsSubmitting(false);
     }
@@ -157,20 +164,29 @@ export default function MembersPage() {
   const handleRevokeInvitation = async (invitationId: string) => {
     if (!confirm("Are you sure you want to revoke this invitation?")) return;
 
+    // Optimistic update - remove from list immediately
+    setInvitations((prev) => prev.filter((i) => i.id !== invitationId));
+
     try {
       const token = await getToken();
       await fetch(`${API_URL}/invitations/${invitationId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
-      await fetchData();
+
+      // Background refresh
+      fetchData(false);
     } catch (error) {
       console.error("Error revoking invitation:", error);
+      fetchData(false);
     }
   };
 
   const handleRemoveMember = async (memberId: string, memberName: string) => {
     if (!confirm(`Are you sure you want to remove ${memberName} from this company? They will lose access immediately.`)) return;
+
+    // Optimistic update - remove from list immediately
+    setMembers((prev) => prev.filter((m) => m.id !== memberId));
 
     try {
       const token = await getToken();
@@ -184,10 +200,12 @@ export default function MembersPage() {
         throw new Error(error.message || "Failed to remove member");
       }
 
-      await fetchData();
+      // Background refresh
+      fetchData(false);
     } catch (error) {
       console.error("Error removing member:", error);
       alert(error instanceof Error ? error.message : "Failed to remove member");
+      fetchData(false);
     }
   };
 
@@ -325,7 +343,7 @@ export default function MembersPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
+          {isInitialLoading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin" />
             </div>

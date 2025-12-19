@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Tooltip,
   TooltipContent,
@@ -20,6 +21,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,7 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CheckSquare, Plus, Clock, AlertCircle, Loader2, ListTodo, CalendarClock, CheckCircle2 } from "lucide-react";
+import { CheckSquare, Plus, Clock, AlertCircle, Loader2, ListTodo, CalendarClock, CheckCircle2, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { useParams } from "next/navigation";
 
@@ -86,9 +93,10 @@ export default function ActionItemsPage() {
 
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const [companyMembers, setCompanyMembers] = useState<CompanyMember[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
 
+  // Create dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -97,9 +105,23 @@ export default function ActionItemsPage() {
   const [priority, setPriority] = useState<"HIGH" | "MEDIUM" | "LOW">("MEDIUM");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchActionItems = async () => {
+  // Edit dialog state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<ActionItem | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editDueDate, setEditDueDate] = useState("");
+  const [editAssigneeId, setEditAssigneeId] = useState("");
+  const [editPriority, setEditPriority] = useState<"HIGH" | "MEDIUM" | "LOW">("MEDIUM");
+  const [editStatus, setEditStatus] = useState<"PENDING" | "IN_PROGRESS" | "COMPLETED" | "OVERDUE">("PENDING");
+
+  // Delete confirmation state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletingItem, setDeletingItem] = useState<ActionItem | null>(null);
+
+  const fetchActionItems = async (showLoading = true) => {
     try {
-      setIsLoading(true);
+      if (showLoading) setIsInitialLoading(true);
       const token = await getToken();
       const response = await fetch(`${API_URL}/companies/${companyId}/action-items`, {
         headers: {
@@ -114,7 +136,7 @@ export default function ActionItemsPage() {
     } catch (error) {
       console.error("Error fetching action items:", error);
     } finally {
-      setIsLoading(false);
+      if (showLoading) setIsInitialLoading(false);
     }
   };
 
@@ -178,14 +200,167 @@ export default function ActionItemsPage() {
         throw new Error("Failed to create action item");
       }
 
+      // Optimistic update - add to list immediately
+      const createdItem = await response.json();
+      setActionItems((prev) => [createdItem, ...prev]);
+
       resetForm();
       setDialogOpen(false);
-      fetchActionItems();
+
+      // Background refresh to ensure sync
+      fetchActionItems(false);
     } catch (error) {
       console.error("Error creating action item:", error);
       alert("Failed to create action item. Please try again.");
+      fetchActionItems(false);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Toggle status (complete/incomplete) with optimistic update
+  const handleToggleStatus = async (item: ActionItem) => {
+    const newStatus = item.status === "COMPLETED" ? "PENDING" : "COMPLETED";
+
+    // Optimistic update
+    setActionItems((prev) =>
+      prev.map((i) => (i.id === item.id ? { ...i, status: newStatus } : i))
+    );
+
+    try {
+      const token = await getToken();
+      const response = await fetch(`${API_URL}/action-items/${item.id}/status`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update status");
+      }
+
+      // Background refresh
+      fetchActionItems(false);
+    } catch (error) {
+      console.error("Error updating status:", error);
+      // Revert on error
+      fetchActionItems(false);
+    }
+  };
+
+  // Open edit dialog
+  const handleOpenEdit = (item: ActionItem) => {
+    setEditingItem(item);
+    setEditTitle(item.title);
+    setEditDescription(item.description || "");
+    setEditDueDate(item.dueDate ? item.dueDate.split("T")[0] : "");
+    setEditAssigneeId(item.assignee?.id || "");
+    setEditPriority(item.priority);
+    setEditStatus(item.status);
+    setEditDialogOpen(true);
+  };
+
+  const resetEditForm = () => {
+    setEditingItem(null);
+    setEditTitle("");
+    setEditDescription("");
+    setEditDueDate("");
+    setEditAssigneeId("");
+    setEditPriority("MEDIUM");
+    setEditStatus("PENDING");
+  };
+
+  // Submit edit with optimistic update
+  const handleEditSubmit = async () => {
+    if (!editingItem || !editTitle.trim()) return;
+
+    const updatedItem = {
+      ...editingItem,
+      title: editTitle.trim(),
+      description: editDescription.trim() || null,
+      dueDate: editDueDate || null,
+      priority: editPriority,
+      status: editStatus,
+    };
+
+    // Optimistic update
+    setActionItems((prev) =>
+      prev.map((i) => (i.id === editingItem.id ? updatedItem : i))
+    );
+    setEditDialogOpen(false);
+    resetEditForm();
+
+    try {
+      setIsSubmitting(true);
+      const token = await getToken();
+      const response = await fetch(`${API_URL}/action-items/${editingItem.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: editTitle.trim(),
+          description: editDescription.trim() || undefined,
+          dueDate: editDueDate || undefined,
+          assigneeId: editAssigneeId || undefined,
+          priority: editPriority,
+          status: editStatus,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update action item");
+      }
+
+      // Background refresh
+      fetchActionItems(false);
+    } catch (error) {
+      console.error("Error updating action item:", error);
+      fetchActionItems(false);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Open delete confirmation
+  const handleOpenDelete = (item: ActionItem) => {
+    setDeletingItem(item);
+    setDeleteDialogOpen(true);
+  };
+
+  // Delete with optimistic update
+  const handleDelete = async () => {
+    if (!deletingItem) return;
+
+    const itemId = deletingItem.id;
+
+    // Optimistic update - remove from list immediately
+    setActionItems((prev) => prev.filter((i) => i.id !== itemId));
+    setDeleteDialogOpen(false);
+    setDeletingItem(null);
+
+    try {
+      const token = await getToken();
+      const response = await fetch(`${API_URL}/action-items/${itemId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete action item");
+      }
+
+      // Background refresh
+      fetchActionItems(false);
+    } catch (error) {
+      console.error("Error deleting action item:", error);
+      fetchActionItems(false);
     }
   };
 
@@ -311,7 +486,7 @@ export default function ActionItemsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
+          {isInitialLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
@@ -337,14 +512,15 @@ export default function ActionItemsPage() {
                   className="flex items-center justify-between rounded-lg border p-4 hover:bg-muted/50 transition-colors"
                 >
                   <div className="flex items-center gap-4">
-                    <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${
-                      item.status === "COMPLETED" ? "bg-green-100" : "bg-amber-100"
-                    }`}>
-                      <CheckSquare className={`h-5 w-5 ${
-                        item.status === "COMPLETED" ? "text-green-600" : "text-amber-600"
-                      }`} />
-                    </div>
-                    <div>
+                    <Checkbox
+                      checked={item.status === "COMPLETED"}
+                      onCheckedChange={() => handleToggleStatus(item)}
+                      className="h-5 w-5"
+                    />
+                    <div
+                      className="flex-1 cursor-pointer"
+                      onClick={() => handleOpenEdit(item)}
+                    >
                       <h4 className={`font-medium ${item.status === "COMPLETED" ? "line-through text-muted-foreground" : ""}`}>
                         {item.title}
                       </h4>
@@ -384,6 +560,26 @@ export default function ActionItemsPage() {
                     <Badge className={getStatusColor(item.status)} variant="secondary">
                       {item.status.replace("_", " ")}
                     </Badge>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleOpenEdit(item)}>
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleOpenDelete(item)}
+                          className="text-red-600"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
               ))}
@@ -476,6 +672,128 @@ export default function ActionItemsPage() {
             <Button onClick={handleSubmit} disabled={isSubmitting || !title.trim()}>
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Action Item Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={(open) => {
+        setEditDialogOpen(open);
+        if (!open) resetEditForm();
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Action Item</DialogTitle>
+            <DialogDescription>
+              Update the action item details.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="edit-title">Title</Label>
+              <Input
+                id="edit-title"
+                placeholder="e.g., Review quarterly report"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-description">Description (optional)</Label>
+              <Textarea
+                id="edit-description"
+                placeholder="Additional details..."
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-assignee">Assignee</Label>
+              <Select value={editAssigneeId} onValueChange={setEditAssigneeId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select assignee" />
+                </SelectTrigger>
+                <SelectContent>
+                  {isLoadingMembers ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    </div>
+                  ) : (
+                    companyMembers.map((member) => (
+                      <SelectItem key={member.id} value={member.user?.id || member.userId}>
+                        {member.user?.firstName} {member.user?.lastName}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-due-date">Due Date (optional)</Label>
+                <Input
+                  id="edit-due-date"
+                  type="date"
+                  value={editDueDate}
+                  onChange={(e) => setEditDueDate(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-priority">Priority</Label>
+                <Select value={editPriority} onValueChange={(v) => setEditPriority(v as "HIGH" | "MEDIUM" | "LOW")}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="HIGH">High</SelectItem>
+                    <SelectItem value="MEDIUM">Medium</SelectItem>
+                    <SelectItem value="LOW">Low</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-status">Status</Label>
+              <Select value={editStatus} onValueChange={(v) => setEditStatus(v as "PENDING" | "IN_PROGRESS" | "COMPLETED" | "OVERDUE")}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PENDING">Pending</SelectItem>
+                  <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                  <SelectItem value="COMPLETED">Completed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button onClick={handleEditSubmit} disabled={isSubmitting || !editTitle.trim()}>
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Action Item</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete &quot;{deletingItem?.title}&quot;? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDelete}>
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>

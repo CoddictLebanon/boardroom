@@ -53,7 +53,7 @@ export default function DocumentsPage() {
   const companyId = params.companyId as string;
 
   const [documents, setDocuments] = useState<Document[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [documentName, setDocumentName] = useState("");
   const [documentDescription, setDocumentDescription] = useState("");
@@ -61,9 +61,9 @@ export default function DocumentsPage() {
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  const fetchDocuments = async () => {
+  const fetchDocuments = async (showLoading = true) => {
     try {
-      setIsLoading(true);
+      if (showLoading) setIsInitialLoading(true);
       const token = await getToken();
       const response = await fetch(`${API_URL}/companies/${companyId}/documents`, {
         headers: {
@@ -78,7 +78,7 @@ export default function DocumentsPage() {
     } catch (error) {
       console.error("Error fetching documents:", error);
     } finally {
-      setIsLoading(false);
+      if (showLoading) setIsInitialLoading(false);
     }
   };
 
@@ -130,12 +130,19 @@ export default function DocumentsPage() {
         throw new Error("Failed to upload document");
       }
 
+      // Optimistic update - add to list immediately
+      const uploadedDoc = await response.json();
+      setDocuments((prev) => [uploadedDoc, ...prev]);
+
       resetForm();
       setDialogOpen(false);
-      fetchDocuments(); // Refresh the list
+
+      // Background refresh
+      fetchDocuments(false);
     } catch (error) {
       console.error("Error uploading document:", error);
       alert("Failed to upload document. Please try again.");
+      fetchDocuments(false);
     } finally {
       setIsUploading(false);
     }
@@ -278,7 +285,7 @@ export default function DocumentsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
+          {isInitialLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>

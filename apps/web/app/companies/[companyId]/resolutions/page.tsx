@@ -74,7 +74,7 @@ export default function ResolutionsPage() {
   const companyId = params.companyId as string;
 
   const [resolutions, setResolutions] = useState<Resolution[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [selectedResolution, setSelectedResolution] = useState<Resolution | null>(null);
@@ -84,9 +84,9 @@ export default function ResolutionsPage() {
   const [effectiveDate, setEffectiveDate] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchResolutions = useCallback(async () => {
+  const fetchResolutions = useCallback(async (showLoading = true) => {
     try {
-      setIsLoading(true);
+      if (showLoading) setIsInitialLoading(true);
       const token = await getToken();
       const response = await fetch(`${API_URL}/companies/${companyId}/resolutions`, {
         headers: {
@@ -101,7 +101,7 @@ export default function ResolutionsPage() {
     } catch (error) {
       console.error("Error fetching resolutions:", error);
     } finally {
-      setIsLoading(false);
+      if (showLoading) setIsInitialLoading(false);
     }
   }, [companyId, getToken]);
 
@@ -142,18 +142,35 @@ export default function ResolutionsPage() {
         throw new Error(errorData.message || "Failed to create resolution");
       }
 
+      // Optimistic update - add to list immediately
+      const createdResolution = await response.json();
+      setResolutions((prev) => [createdResolution, ...prev]);
+
       resetForm();
       setDialogOpen(false);
-      await fetchResolutions();
+
+      // Background refresh
+      fetchResolutions(false);
     } catch (error) {
       console.error("Error creating resolution:", error);
       alert(error instanceof Error ? error.message : "Failed to create resolution. Please try again.");
+      fetchResolutions(false);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleUpdateStatus = async (resolutionId: string, newStatus: ResolutionStatus) => {
+    // Optimistic update
+    setResolutions((prev) =>
+      prev.map((r) => (r.id === resolutionId ? { ...r, status: newStatus } : r))
+    );
+
+    // Update selected resolution if viewing
+    if (selectedResolution?.id === resolutionId) {
+      setSelectedResolution((prev) => prev ? { ...prev, status: newStatus } : null);
+    }
+
     try {
       const token = await getToken();
       const response = await fetch(`${API_URL}/resolutions/${resolutionId}`, {
@@ -169,15 +186,20 @@ export default function ResolutionsPage() {
         throw new Error("Failed to update resolution");
       }
 
-      await fetchResolutions();
+      // Background refresh
+      fetchResolutions(false);
     } catch (error) {
       console.error("Error updating resolution:", error);
       alert("Failed to update resolution status. Please try again.");
+      fetchResolutions(false);
     }
   };
 
   const handleDelete = async (resolutionId: string) => {
     if (!confirm("Are you sure you want to delete this resolution?")) return;
+
+    // Optimistic update - remove from list immediately
+    setResolutions((prev) => prev.filter((r) => r.id !== resolutionId));
 
     try {
       const token = await getToken();
@@ -192,10 +214,12 @@ export default function ResolutionsPage() {
         throw new Error("Failed to delete resolution");
       }
 
-      await fetchResolutions();
+      // Background refresh
+      fetchResolutions(false);
     } catch (error) {
       console.error("Error deleting resolution:", error);
       alert("Failed to delete resolution. Please try again.");
+      fetchResolutions(false);
     }
   };
 
@@ -283,7 +307,7 @@ export default function ResolutionsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
+          {isInitialLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
