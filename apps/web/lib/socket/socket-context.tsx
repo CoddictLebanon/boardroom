@@ -16,7 +16,17 @@ const SocketContext = createContext<SocketContextType>({
   error: null,
 });
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+// Extract base URL without /api/v1 path for socket connection
+const getSocketUrl = () => {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+  try {
+    const url = new URL(apiUrl);
+    return `${url.protocol}//${url.host}`;
+  } catch {
+    return "http://localhost:3001";
+  }
+};
+const SOCKET_URL = getSocketUrl();
 
 export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [socket, setSocket] = useState<Socket | null>(null);
