@@ -9,18 +9,23 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import { ActionItemsService } from './action-items.service';
 import { CreateActionItemDto, UpdateActionItemDto, UpdateActionItemStatusDto } from './dto';
 import { ActionStatus, Priority } from '@prisma/client';
 import { CurrentUser } from '../auth/decorators';
+import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
+import { PermissionGuard, RequirePermission } from '../permissions';
 
 @Controller()
+@UseGuards(ClerkAuthGuard, PermissionGuard)
 export class ActionItemsController {
   constructor(private readonly actionItemsService: ActionItemsService) {}
 
   @Post('companies/:companyId/action-items')
   @HttpCode(HttpStatus.CREATED)
+  @RequirePermission('action_items.create')
   create(
     @Param('companyId') companyId: string,
     @Body() createActionItemDto: CreateActionItemDto,
@@ -30,6 +35,7 @@ export class ActionItemsController {
   }
 
   @Get('companies/:companyId/action-items')
+  @RequirePermission('action_items.view')
   findAll(
     @Param('companyId') companyId: string,
     @Query('status') status?: ActionStatus,
@@ -49,20 +55,25 @@ export class ActionItemsController {
   }
 
   @Get('action-items/my')
+  // No permission required - user can view their own action items across companies
   findMyActionItems(@CurrentUser('userId') userId: string) {
     return this.actionItemsService.findMyActionItems(userId);
   }
 
-  @Get('action-items/:id')
+  @Get('companies/:companyId/action-items/:id')
+  @RequirePermission('action_items.view')
   findOne(
+    @Param('companyId') companyId: string,
     @Param('id') id: string,
     @CurrentUser('userId') userId: string,
   ) {
     return this.actionItemsService.findOne(id, userId);
   }
 
-  @Put('action-items/:id')
+  @Put('companies/:companyId/action-items/:id')
+  @RequirePermission('action_items.edit')
   update(
+    @Param('companyId') companyId: string,
     @Param('id') id: string,
     @Body() updateActionItemDto: UpdateActionItemDto,
     @CurrentUser('userId') userId: string,
@@ -70,8 +81,10 @@ export class ActionItemsController {
     return this.actionItemsService.update(id, updateActionItemDto, userId);
   }
 
-  @Put('action-items/:id/status')
+  @Put('companies/:companyId/action-items/:id/status')
+  @RequirePermission('action_items.complete')
   updateStatus(
+    @Param('companyId') companyId: string,
     @Param('id') id: string,
     @Body() updateStatusDto: UpdateActionItemStatusDto,
     @CurrentUser('userId') userId: string,
@@ -79,9 +92,11 @@ export class ActionItemsController {
     return this.actionItemsService.updateStatus(id, updateStatusDto, userId);
   }
 
-  @Delete('action-items/:id')
+  @Delete('companies/:companyId/action-items/:id')
   @HttpCode(HttpStatus.OK)
+  @RequirePermission('action_items.delete')
   remove(
+    @Param('companyId') companyId: string,
     @Param('id') id: string,
     @CurrentUser('userId') userId: string,
   ) {

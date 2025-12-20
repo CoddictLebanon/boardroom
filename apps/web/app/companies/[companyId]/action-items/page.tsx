@@ -40,6 +40,7 @@ import {
 import { CheckSquare, Plus, Clock, AlertCircle, Loader2, ListTodo, CalendarClock, CheckCircle2, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { useParams } from "next/navigation";
+import { usePermission } from "@/lib/permissions";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
 
@@ -90,6 +91,11 @@ export default function ActionItemsPage() {
   const { getToken } = useAuth();
   const params = useParams();
   const companyId = params.companyId as string;
+
+  const canCreate = usePermission("action_items.create");
+  const canEdit = usePermission("action_items.edit");
+  const canDelete = usePermission("action_items.delete");
+  const canComplete = usePermission("action_items.complete");
 
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const [companyMembers, setCompanyMembers] = useState<CompanyMember[]>([]);
@@ -229,7 +235,7 @@ export default function ActionItemsPage() {
 
     try {
       const token = await getToken();
-      const response = await fetch(`${API_URL}/action-items/${item.id}/status`, {
+      const response = await fetch(`${API_URL}/companies/${companyId}/action-items/${item.id}/status`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -296,7 +302,7 @@ export default function ActionItemsPage() {
     try {
       setIsSubmitting(true);
       const token = await getToken();
-      const response = await fetch(`${API_URL}/action-items/${editingItem.id}`, {
+      const response = await fetch(`${API_URL}/companies/${companyId}/action-items/${editingItem.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -345,7 +351,7 @@ export default function ActionItemsPage() {
 
     try {
       const token = await getToken();
-      const response = await fetch(`${API_URL}/action-items/${itemId}`, {
+      const response = await fetch(`${API_URL}/companies/${companyId}/action-items/${itemId}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -418,10 +424,12 @@ export default function ActionItemsPage() {
             Track and manage tasks assigned from meetings
           </p>
         </div>
-        <Button onClick={() => setDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Action Item
-        </Button>
+        {canCreate && (
+          <Button onClick={() => setDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Action Item
+          </Button>
+        )}
       </div>
 
       {/* Stats */}
@@ -499,10 +507,12 @@ export default function ActionItemsPage() {
               <p className="mt-2 text-sm text-muted-foreground">
                 Action items will appear here when created from meetings or added manually.
               </p>
-              <Button className="mt-4" onClick={() => setDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Action Item
-              </Button>
+              {canCreate && (
+                <Button className="mt-4" onClick={() => setDialogOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Action Item
+                </Button>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
@@ -512,11 +522,13 @@ export default function ActionItemsPage() {
                   className="flex items-center justify-between rounded-lg border p-4 hover:bg-muted/50 transition-colors"
                 >
                   <div className="flex items-center gap-4">
-                    <Checkbox
-                      checked={item.status === "COMPLETED"}
-                      onCheckedChange={() => handleToggleStatus(item)}
-                      className="h-5 w-5"
-                    />
+                    {canComplete && (
+                      <Checkbox
+                        checked={item.status === "COMPLETED"}
+                        onCheckedChange={() => handleToggleStatus(item)}
+                        className="h-5 w-5"
+                      />
+                    )}
                     <div
                       className="flex-1 cursor-pointer"
                       onClick={() => handleOpenEdit(item)}
@@ -560,26 +572,32 @@ export default function ActionItemsPage() {
                     <Badge className={getStatusColor(item.status)} variant="secondary">
                       {item.status.replace("_", " ")}
                     </Badge>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleOpenEdit(item)}>
-                          <Pencil className="mr-2 h-4 w-4" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => handleOpenDelete(item)}
-                          className="text-red-600"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {(canEdit || canDelete) && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {canEdit && (
+                            <DropdownMenuItem onClick={() => handleOpenEdit(item)}>
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                          )}
+                          {canDelete && (
+                            <DropdownMenuItem
+                              onClick={() => handleOpenDelete(item)}
+                              className="text-red-600"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </div>
                 </div>
               ))}
