@@ -144,7 +144,7 @@ export default function NewMeetingPage() {
 
       // Add attendees if any selected
       if (selectedMemberIds.length > 0) {
-        const attendeesResponse = await fetch(`${API_URL}/meetings/${meeting.id}/attendees`, {
+        const attendeesResponse = await fetch(`${API_URL}/companies/${companyId}/meetings/${meeting.id}/attendees`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

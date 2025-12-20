@@ -26,6 +26,7 @@ import {
 import { FileText, FolderOpen, Upload, Download, Loader2, ExternalLink } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { useParams } from "next/navigation";
+import { usePermission } from "@/lib/permissions";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
 
@@ -51,6 +52,9 @@ export default function DocumentsPage() {
   const { getToken } = useAuth();
   const params = useParams();
   const companyId = params.companyId as string;
+
+  const canUpload = usePermission("documents.upload");
+  const canDelete = usePermission("documents.delete");
 
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
@@ -151,7 +155,7 @@ export default function DocumentsPage() {
   const handleDownload = async (documentId: string) => {
     try {
       const token = await getToken();
-      const response = await fetch(`${API_URL}/documents/${documentId}/download?companyId=${companyId}`, {
+      const response = await fetch(`${API_URL}/companies/${companyId}/documents/${documentId}/download`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -214,10 +218,12 @@ export default function DocumentsPage() {
             Manage board documents and files
           </p>
         </div>
-        <Button onClick={() => setDialogOpen(true)}>
-          <Upload className="mr-2 h-4 w-4" />
-          Upload Document
-        </Button>
+        {canUpload && (
+          <Button onClick={() => setDialogOpen(true)}>
+            <Upload className="mr-2 h-4 w-4" />
+            Upload Document
+          </Button>
+        )}
       </div>
 
       {/* Folders */}
@@ -298,10 +304,12 @@ export default function DocumentsPage() {
               <p className="mt-2 text-sm text-muted-foreground">
                 Upload your first document to get started.
               </p>
-              <Button className="mt-4" onClick={() => setDialogOpen(true)}>
-                <Upload className="mr-2 h-4 w-4" />
-                Upload Document
-              </Button>
+              {canUpload && (
+                <Button className="mt-4" onClick={() => setDialogOpen(true)}>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload Document
+                </Button>
+              )}
             </div>
           ) : (
             <div className="space-y-3">

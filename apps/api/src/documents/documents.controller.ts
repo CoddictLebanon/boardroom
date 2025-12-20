@@ -14,6 +14,7 @@ import {
   FileTypeValidator,
   Res,
   NotFoundException,
+  UseGuards,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -30,9 +31,12 @@ import {
 } from './dto';
 import { CurrentUser } from '../auth/decorators';
 import { Public } from '../auth/decorators';
+import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
+import { PermissionGuard, RequirePermission } from '../permissions';
 
 @ApiTags('documents')
 @Controller()
+@UseGuards(ClerkAuthGuard, PermissionGuard)
 export class DocumentsController {
   constructor(
     private readonly documentsService: DocumentsService,
@@ -45,6 +49,7 @@ export class DocumentsController {
 
   @Post('companies/:companyId/folders')
   @ApiOperation({ summary: 'Create a new folder' })
+  @RequirePermission('documents.upload')
   createFolder(
     @Param('companyId') companyId: string,
     @Body() dto: CreateFolderDto,
@@ -54,25 +59,28 @@ export class DocumentsController {
 
   @Get('companies/:companyId/folders')
   @ApiOperation({ summary: 'List all folders for a company' })
+  @RequirePermission('documents.view')
   listFolders(@Param('companyId') companyId: string) {
     return this.documentsService.listFolders(companyId);
   }
 
-  @Put('folders/:id')
+  @Put('companies/:companyId/folders/:id')
   @ApiOperation({ summary: 'Update a folder' })
+  @RequirePermission('documents.upload')
   updateFolder(
+    @Param('companyId') companyId: string,
     @Param('id') id: string,
     @Body() dto: UpdateFolderDto,
-    @Query('companyId') companyId: string,
   ) {
     return this.documentsService.updateFolder(id, companyId, dto);
   }
 
-  @Delete('folders/:id')
+  @Delete('companies/:companyId/folders/:id')
   @ApiOperation({ summary: 'Delete a folder' })
+  @RequirePermission('documents.delete')
   deleteFolder(
+    @Param('companyId') companyId: string,
     @Param('id') id: string,
-    @Query('companyId') companyId: string,
   ) {
     return this.documentsService.deleteFolder(id, companyId);
   }
@@ -101,6 +109,7 @@ export class DocumentsController {
     },
   })
   @UseInterceptors(FileInterceptor('file'))
+  @RequirePermission('documents.upload')
   createDocument(
     @Param('companyId') companyId: string,
     @Body() dto: CreateDocumentDto,
@@ -122,6 +131,7 @@ export class DocumentsController {
 
   @Get('companies/:companyId/documents')
   @ApiOperation({ summary: 'List documents with optional filters' })
+  @RequirePermission('documents.view')
   listDocuments(
     @Param('companyId') companyId: string,
     @Query() query: ListDocumentsQueryDto,
@@ -129,35 +139,38 @@ export class DocumentsController {
     return this.documentsService.listDocuments(companyId, query);
   }
 
-  @Get('documents/:id')
+  @Get('companies/:companyId/documents/:id')
   @ApiOperation({ summary: 'Get document details with versions' })
+  @RequirePermission('documents.view')
   getDocument(
+    @Param('companyId') companyId: string,
     @Param('id') id: string,
-    @Query('companyId') companyId: string,
   ) {
     return this.documentsService.getDocument(id, companyId);
   }
 
-  @Get('documents/:id/download')
+  @Get('companies/:companyId/documents/:id/download')
   @ApiOperation({ summary: 'Get presigned download URL' })
+  @RequirePermission('documents.download')
   getDownloadUrl(
+    @Param('companyId') companyId: string,
     @Param('id') id: string,
-    @Query('companyId') companyId: string,
   ) {
     return this.documentsService.getDownloadUrl(id, companyId);
   }
 
-  @Put('documents/:id')
+  @Put('companies/:companyId/documents/:id')
   @ApiOperation({ summary: 'Update document metadata' })
+  @RequirePermission('documents.upload')
   updateDocument(
+    @Param('companyId') companyId: string,
     @Param('id') id: string,
-    @Query('companyId') companyId: string,
     @Body() dto: UpdateDocumentDto,
   ) {
     return this.documentsService.updateDocument(id, companyId, dto);
   }
 
-  @Post('documents/:id/version')
+  @Post('companies/:companyId/documents/:id/version')
   @ApiOperation({ summary: 'Upload a new version of a document' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -173,9 +186,10 @@ export class DocumentsController {
     },
   })
   @UseInterceptors(FileInterceptor('file'))
+  @RequirePermission('documents.upload')
   uploadNewVersion(
+    @Param('companyId') companyId: string,
     @Param('id') id: string,
-    @Query('companyId') companyId: string,
     @CurrentUser('userId') uploaderId: string,
     @UploadedFile(
       new ParseFilePipe({
@@ -192,11 +206,12 @@ export class DocumentsController {
     return this.documentsService.uploadNewVersion(id, companyId, uploaderId, file);
   }
 
-  @Delete('documents/:id')
+  @Delete('companies/:companyId/documents/:id')
   @ApiOperation({ summary: 'Delete a document' })
+  @RequirePermission('documents.delete')
   deleteDocument(
+    @Param('companyId') companyId: string,
     @Param('id') id: string,
-    @Query('companyId') companyId: string,
   ) {
     return this.documentsService.deleteDocument(id, companyId);
   }
@@ -205,22 +220,24 @@ export class DocumentsController {
   // TAGS
   // ==========================================
 
-  @Post('documents/:id/tags')
+  @Post('companies/:companyId/documents/:id/tags')
   @ApiOperation({ summary: 'Add tags to a document' })
+  @RequirePermission('documents.upload')
   addTags(
+    @Param('companyId') companyId: string,
     @Param('id') id: string,
-    @Query('companyId') companyId: string,
     @Body() dto: AddTagsDto,
   ) {
     return this.documentsService.addTags(id, companyId, dto);
   }
 
-  @Delete('documents/:id/tags/:tag')
+  @Delete('companies/:companyId/documents/:id/tags/:tag')
   @ApiOperation({ summary: 'Remove a tag from a document' })
+  @RequirePermission('documents.upload')
   removeTag(
+    @Param('companyId') companyId: string,
     @Param('id') id: string,
     @Param('tag') tag: string,
-    @Query('companyId') companyId: string,
   ) {
     return this.documentsService.removeTag(id, companyId, tag);
   }

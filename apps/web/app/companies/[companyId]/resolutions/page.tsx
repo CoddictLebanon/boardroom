@@ -32,6 +32,7 @@ import { Vote, Plus, Loader2, CheckCircle2, Clock, XCircle, ScrollText, MoreHori
 import { useAuth } from "@clerk/nextjs";
 import { useParams } from "next/navigation";
 import { format } from "date-fns";
+import { usePermission } from "@/lib/permissions";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
 
@@ -72,6 +73,11 @@ export default function ResolutionsPage() {
   const { getToken } = useAuth();
   const params = useParams();
   const companyId = params.companyId as string;
+
+  const canCreate = usePermission("resolutions.create");
+  const canEdit = usePermission("resolutions.edit");
+  const canDelete = usePermission("resolutions.delete");
+  const canChangeStatus = usePermission("resolutions.change_status");
 
   const [resolutions, setResolutions] = useState<Resolution[]>([]);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
@@ -173,7 +179,7 @@ export default function ResolutionsPage() {
 
     try {
       const token = await getToken();
-      const response = await fetch(`${API_URL}/resolutions/${resolutionId}`, {
+      const response = await fetch(`${API_URL}/companies/${companyId}/resolutions/${resolutionId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -203,7 +209,7 @@ export default function ResolutionsPage() {
 
     try {
       const token = await getToken();
-      const response = await fetch(`${API_URL}/resolutions/${resolutionId}`, {
+      const response = await fetch(`${API_URL}/companies/${companyId}/resolutions/${resolutionId}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -239,10 +245,12 @@ export default function ResolutionsPage() {
             Board resolutions and their status
           </p>
         </div>
-        <Button onClick={() => setDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Resolution
-        </Button>
+        {canCreate && (
+          <Button onClick={() => setDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Resolution
+          </Button>
+        )}
       </div>
 
       {/* Stats */}
@@ -351,61 +359,63 @@ export default function ResolutionsPage() {
                     <Badge className={statusColors[resolution.status]}>
                       {resolution.status}
                     </Badge>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" size="sm">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {resolution.status === "DRAFT" && (
-                          <DropdownMenuItem onClick={(e) => {
-                            e.stopPropagation();
-                            handleUpdateStatus(resolution.id, "PROPOSED");
-                          }}>
-                            <Clock className="mr-2 h-4 w-4" />
-                            Propose
-                          </DropdownMenuItem>
-                        )}
-                        {(resolution.status === "DRAFT" || resolution.status === "PROPOSED") && (
-                          <>
+                    {(canChangeStatus || (canDelete && resolution.status === "DRAFT")) && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                          <Button variant="ghost" size="sm">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {canChangeStatus && resolution.status === "DRAFT" && (
                             <DropdownMenuItem onClick={(e) => {
                               e.stopPropagation();
-                              handleUpdateStatus(resolution.id, "PASSED");
+                              handleUpdateStatus(resolution.id, "PROPOSED");
                             }}>
-                              <CheckCircle2 className="mr-2 h-4 w-4 text-green-600" />
-                              Mark as Passed
+                              <Clock className="mr-2 h-4 w-4" />
+                              Propose
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={(e) => {
-                              e.stopPropagation();
-                              handleUpdateStatus(resolution.id, "REJECTED");
-                            }}>
-                              <XCircle className="mr-2 h-4 w-4 text-red-600" />
-                              Mark as Rejected
+                          )}
+                          {canChangeStatus && (resolution.status === "DRAFT" || resolution.status === "PROPOSED") && (
+                            <>
+                              <DropdownMenuItem onClick={(e) => {
+                                e.stopPropagation();
+                                handleUpdateStatus(resolution.id, "PASSED");
+                              }}>
+                                <CheckCircle2 className="mr-2 h-4 w-4 text-green-600" />
+                                Mark as Passed
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => {
+                                e.stopPropagation();
+                                handleUpdateStatus(resolution.id, "REJECTED");
+                              }}>
+                                <XCircle className="mr-2 h-4 w-4 text-red-600" />
+                                Mark as Rejected
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={(e) => {
+                                e.stopPropagation();
+                                handleUpdateStatus(resolution.id, "TABLED");
+                              }}>
+                                <Clock className="mr-2 h-4 w-4 text-amber-600" />
+                                Table for Later
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                          {canDelete && resolution.status === "DRAFT" && (
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(resolution.id);
+                              }}
+                              className="text-red-600"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={(e) => {
-                              e.stopPropagation();
-                              handleUpdateStatus(resolution.id, "TABLED");
-                            }}>
-                              <Clock className="mr-2 h-4 w-4 text-amber-600" />
-                              Table for Later
-                            </DropdownMenuItem>
-                          </>
-                        )}
-                        {resolution.status === "DRAFT" && (
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete(resolution.id);
-                            }}
-                            className="text-red-600"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </div>
                 </div>
               ))}
@@ -419,10 +429,12 @@ export default function ResolutionsPage() {
               <p className="mt-2 text-sm text-muted-foreground">
                 Create your first board resolution to get started.
               </p>
-              <Button className="mt-4" onClick={() => setDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Resolution
-              </Button>
+              {canCreate && (
+                <Button className="mt-4" onClick={() => setDialogOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Resolution
+                </Button>
+              )}
             </div>
           )}
         </CardContent>
@@ -533,7 +545,7 @@ export default function ResolutionsPage() {
                 <Button variant="outline" onClick={() => setViewDialogOpen(false)}>
                   Close
                 </Button>
-                {(selectedResolution.status === "DRAFT" || selectedResolution.status === "PROPOSED") && (
+                {canChangeStatus && (selectedResolution.status === "DRAFT" || selectedResolution.status === "PROPOSED") && (
                   <>
                     <Button
                       variant="outline"

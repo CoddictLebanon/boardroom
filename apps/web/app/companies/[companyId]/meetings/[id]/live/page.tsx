@@ -215,7 +215,7 @@ export default function LiveMeetingPage({
     try {
       setIsStarting(true);
       const token = await getToken();
-      const response = await fetch(`${API_URL}/meetings/${id}/start`, {
+      const response = await fetch(`${API_URL}/companies/${companyId}/meetings/${id}/start`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -234,7 +234,7 @@ export default function LiveMeetingPage({
     try {
       setIsPausing(true);
       const token = await getToken();
-      const response = await fetch(`${API_URL}/meetings/${id}/pause`, {
+      const response = await fetch(`${API_URL}/companies/${companyId}/meetings/${id}/pause`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -252,7 +252,7 @@ export default function LiveMeetingPage({
     try {
       setIsResuming(true);
       const token = await getToken();
-      const response = await fetch(`${API_URL}/meetings/${id}/resume`, {
+      const response = await fetch(`${API_URL}/companies/${companyId}/meetings/${id}/resume`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -270,7 +270,7 @@ export default function LiveMeetingPage({
     try {
       setIsEnding(true);
       const token = await getToken();
-      const response = await fetch(`${API_URL}/meetings/${id}/end`, {
+      const response = await fetch(`${API_URL}/companies/${companyId}/meetings/${id}/end`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -290,7 +290,7 @@ export default function LiveMeetingPage({
     try {
       setAttendanceUpdating(attendeeId);
       const token = await getToken();
-      const response = await fetch(`${API_URL}/meetings/${id}/attendees/${attendeeId}`, {
+      const response = await fetch(`${API_URL}/companies/${companyId}/meetings/${id}/attendees/${attendeeId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -318,7 +318,7 @@ export default function LiveMeetingPage({
     try {
       setIsSubmittingVote(true);
       const token = await getToken();
-      const response = await fetch(`${API_URL}/meetings/${id}/decisions`, {
+      const response = await fetch(`${API_URL}/companies/${companyId}/meetings/${id}/decisions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -356,7 +356,7 @@ export default function LiveMeetingPage({
     try {
       setIsCastingVote(true);
       const token = await getToken();
-      const response = await fetch(`${API_URL}/meetings/${id}/decisions/${decisionId}/vote`, {
+      const response = await fetch(`${API_URL}/companies/${companyId}/meetings/${id}/decisions/${decisionId}/vote`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -380,7 +380,7 @@ export default function LiveMeetingPage({
   const handleFinalizeVote = async (decisionId: string, outcome: "PASSED" | "REJECTED") => {
     try {
       const token = await getToken();
-      const response = await fetch(`${API_URL}/meetings/${id}/decisions/${decisionId}`, {
+      const response = await fetch(`${API_URL}/companies/${companyId}/meetings/${id}/decisions/${decisionId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -441,7 +441,7 @@ export default function LiveMeetingPage({
     try {
       setIsSavingNotes(true);
       const token = await getToken();
-      const response = await fetch(`${API_URL}/meetings/${id}/notes`, {
+      const response = await fetch(`${API_URL}/companies/${companyId}/meetings/${id}/notes`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

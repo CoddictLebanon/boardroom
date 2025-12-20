@@ -148,8 +148,8 @@ export default function MeetingDetailPage({
 
       const isEditing = editingAgendaId !== null;
       const url = isEditing
-        ? `${API_URL}/meetings/${id}/agenda/${editingAgendaId}`
-        : `${API_URL}/meetings/${id}/agenda`;
+        ? `${API_URL}/companies/${companyId}/meetings/${id}/agenda/${editingAgendaId}`
+        : `${API_URL}/companies/${companyId}/meetings/${id}/agenda`;
 
       const response = await fetch(url, {
         method: isEditing ? "PUT" : "POST",
@@ -228,7 +228,7 @@ export default function MeetingDetailPage({
       setIsAddingAttendees(true);
       const token = await getToken();
 
-      const response = await fetch(`${API_URL}/meetings/${id}/attendees`, {
+      const response = await fetch(`${API_URL}/companies/${companyId}/meetings/${id}/attendees`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
