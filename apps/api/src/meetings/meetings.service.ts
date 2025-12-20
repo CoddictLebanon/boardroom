@@ -218,6 +218,30 @@ export class MeetingsService {
             },
           },
         },
+        actionItems: {
+          include: {
+            assignee: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                imageUrl: true,
+              },
+            },
+            creator: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
         summary: true,
       },
     });

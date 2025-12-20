@@ -801,16 +801,61 @@ export default function MeetingDetailPage({
               </Button>
             </CardHeader>
             <CardContent>
-              <div className="py-4 text-center">
-                <CheckSquare className="mx-auto h-8 w-8 text-muted-foreground/50" />
-                <p className="mt-2 text-sm text-muted-foreground">
-                  No action items yet
-                </p>
-                <Button size="sm" variant="outline" className="mt-4" onClick={openActionItemDialog}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Action Item
-                </Button>
-              </div>
+              {meeting.actionItems && meeting.actionItems.length > 0 ? (
+                <div className="space-y-3">
+                  {meeting.actionItems.map((item: any) => (
+                    <div key={item.id} className="flex items-start gap-3 rounded-lg border p-3">
+                      <div className={`mt-0.5 h-2 w-2 rounded-full ${
+                        item.status === "COMPLETED" ? "bg-green-500" :
+                        item.status === "IN_PROGRESS" ? "bg-blue-500" :
+                        "bg-gray-300"
+                      }`} />
+                      <div className="flex-1 min-w-0">
+                        <p className={`font-medium ${item.status === "COMPLETED" ? "line-through text-muted-foreground" : ""}`}>
+                          {item.title}
+                        </p>
+                        {item.description && (
+                          <p className="text-sm text-muted-foreground line-clamp-2">{item.description}</p>
+                        )}
+                        <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+                          {item.assignee && (
+                            <span className="flex items-center gap-1">
+                              <Avatar className="h-4 w-4">
+                                <AvatarImage src={item.assignee.imageUrl} />
+                                <AvatarFallback className="text-[8px]">
+                                  {getInitials(item.assignee.firstName, item.assignee.lastName)}
+                                </AvatarFallback>
+                              </Avatar>
+                              {item.assignee.firstName}
+                            </span>
+                          )}
+                          {item.dueDate && (
+                            <span>Due {format(new Date(item.dueDate), "MMM d")}</span>
+                          )}
+                          <Badge variant="outline" className={`text-[10px] px-1 py-0 ${
+                            item.priority === "HIGH" ? "border-red-300 text-red-700" :
+                            item.priority === "LOW" ? "border-gray-300 text-gray-600" :
+                            "border-amber-300 text-amber-700"
+                          }`}>
+                            {item.priority}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-4 text-center">
+                  <CheckSquare className="mx-auto h-8 w-8 text-muted-foreground/50" />
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    No action items yet
+                  </p>
+                  <Button size="sm" variant="outline" className="mt-4" onClick={openActionItemDialog}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Action Item
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
