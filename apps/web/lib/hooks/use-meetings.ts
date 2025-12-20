@@ -64,18 +64,20 @@ export function useMeetings(options: UseMeetingsOptions = {}) {
 
 export function useMeeting(meetingId: string) {
   const { getToken, isLoaded } = useAuth();
+  const params = useParams();
+  const companyId = params.companyId as string;
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchMeeting = useCallback(async () => {
-    if (!isLoaded || !meetingId) return;
+    if (!isLoaded || !meetingId || !companyId) return;
 
     try {
       setIsLoading(true);
       const token = await getToken();
 
-      const response = await fetch(`${API_URL}/meetings/${meetingId}`, {
+      const response = await fetch(`${API_URL}/companies/${companyId}/meetings/${meetingId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -93,7 +95,7 @@ export function useMeeting(meetingId: string) {
     } finally {
       setIsLoading(false);
     }
-  }, [getToken, isLoaded, meetingId]);
+  }, [getToken, isLoaded, meetingId, companyId]);
 
   useEffect(() => {
     fetchMeeting();
@@ -158,12 +160,17 @@ export function useMeetingMutations() {
 
   const updateMeeting = useCallback(
     async (meetingId: string, data: Partial<CreateMeetingData>): Promise<Meeting | null> => {
+      if (!companyId) {
+        setError("No company selected");
+        return null;
+      }
+
       try {
         setIsLoading(true);
         setError(null);
         const token = await getToken();
 
-        const response = await fetch(`${API_URL}/meetings/${meetingId}`, {
+        const response = await fetch(`${API_URL}/companies/${companyId}/meetings/${meetingId}`, {
           method: "PUT",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -185,17 +192,22 @@ export function useMeetingMutations() {
         setIsLoading(false);
       }
     },
-    [getToken]
+    [getToken, companyId]
   );
 
   const cancelMeeting = useCallback(
     async (meetingId: string): Promise<boolean> => {
+      if (!companyId) {
+        setError("No company selected");
+        return false;
+      }
+
       try {
         setIsLoading(true);
         setError(null);
         const token = await getToken();
 
-        const response = await fetch(`${API_URL}/meetings/${meetingId}`, {
+        const response = await fetch(`${API_URL}/companies/${companyId}/meetings/${meetingId}`, {
           method: "DELETE",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -215,7 +227,7 @@ export function useMeetingMutations() {
         setIsLoading(false);
       }
     },
-    [getToken]
+    [getToken, companyId]
   );
 
   return {
