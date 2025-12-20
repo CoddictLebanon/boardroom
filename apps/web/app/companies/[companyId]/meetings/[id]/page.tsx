@@ -184,7 +184,7 @@ export default function MeetingDetailPage({
 
   // Attendees functions
   const openAttendeesDialog = async () => {
-    if (!meeting?.companyId) return;
+    if (!companyId) return;
 
     setAttendeesDialogOpen(true);
     setIsLoadingMembers(true);
@@ -192,7 +192,7 @@ export default function MeetingDetailPage({
 
     try {
       const token = await getToken();
-      const response = await fetch(`${API_URL}/companies/${meeting.companyId}`, {
+      const response = await fetch(`${API_URL}/companies/${companyId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -269,7 +269,7 @@ export default function MeetingDetailPage({
   };
 
   const openActionItemDialog = async () => {
-    if (!meeting?.companyId) return;
+    if (!companyId) return;
 
     resetActionItemForm();
     setActionItemDialogOpen(true);
@@ -279,7 +279,7 @@ export default function MeetingDetailPage({
       setIsLoadingMembers(true);
       try {
         const token = await getToken();
-        const response = await fetch(`${API_URL}/companies/${meeting.companyId}`, {
+        const response = await fetch(`${API_URL}/companies/${companyId}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -300,13 +300,13 @@ export default function MeetingDetailPage({
   };
 
   const handleSubmitActionItem = async () => {
-    if (!actionItemTitle.trim() || !meeting?.companyId) return;
+    if (!actionItemTitle.trim() || !companyId) return;
 
     try {
       setIsSubmittingActionItem(true);
       const token = await getToken();
 
-      const response = await fetch(`${API_URL}/companies/${meeting.companyId}/action-items`, {
+      const response = await fetch(`${API_URL}/companies/${companyId}/action-items`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -375,7 +375,7 @@ export default function MeetingDetailPage({
         formData.append("description", documentDescription.trim());
       }
 
-      const response = await fetch(`${API_URL}/companies/${meeting.companyId}/documents`, {
+      const response = await fetch(`${API_URL}/companies/${companyId}/documents`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
