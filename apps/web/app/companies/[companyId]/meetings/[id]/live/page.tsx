@@ -187,10 +187,10 @@ export default function LiveMeetingPage({
   // Load company members for action item assignment
   useEffect(() => {
     const loadMembers = async () => {
-      if (!meeting?.companyId) return;
+      if (!companyId) return;
       try {
         const token = await getToken();
-        const response = await fetch(`${API_URL}/companies/${meeting.companyId}`, {
+        const response = await fetch(`${API_URL}/companies/${companyId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (response.ok) {
@@ -202,7 +202,7 @@ export default function LiveMeetingPage({
       }
     };
     loadMembers();
-  }, [meeting?.companyId, getToken]);
+  }, [companyId, getToken]);
 
   // Load meeting notes when meeting loads
   useEffect(() => {
@@ -406,11 +406,11 @@ export default function LiveMeetingPage({
   };
 
   const handleCreateAction = async () => {
-    if (!actionTitle.trim() || !meeting?.companyId) return;
+    if (!actionTitle.trim() || !companyId) return;
     try {
       setIsSubmittingAction(true);
       const token = await getToken();
-      const response = await fetch(`${API_URL}/companies/${meeting.companyId}/action-items`, {
+      const response = await fetch(`${API_URL}/companies/${companyId}/action-items`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
