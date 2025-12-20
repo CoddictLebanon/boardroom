@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   images: {
@@ -15,4 +16,12 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  org: "chairboard",
+  project: "boardmeeting-web",
+  silent: !process.env.CI,
+  sourcemaps: {
+    disable: true,
+  },
+  telemetry: false,
+});

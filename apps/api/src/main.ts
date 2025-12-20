@@ -1,17 +1,50 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe, Logger } from '@nestjs/common';
+import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
+import { SentryExceptionFilter } from './common/filters/sentry-exception.filter';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import * as Sentry from '@sentry/nestjs';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
+
+  // Initialize Sentry before creating the app
+  if (process.env.SENTRY_DSN) {
+    Sentry.init({
+      dsn: process.env.SENTRY_DSN,
+      environment: process.env.NODE_ENV || 'development',
+      tracesSampleRate: 0,
+      sendDefaultPii: false,
+    });
+    logger.log('Sentry initialized for error tracking');
+  }
 
   const app = await NestFactory.create(AppModule, {
     logger: ['error', 'warn', 'log'],
     rawBody: true, // Enable raw body for webhook signature verification
   });
 
+  // Global exception filter
+  app.useGlobalFilters(new GlobalExceptionFilter());
+
+  // Sentry exception filter for server errors
+  if (process.env.SENTRY_DSN) {
+    app.useGlobalFilters(new SentryExceptionFilter());
+  }
+
   // API versioning
   app.setGlobalPrefix('api/v1');
+
+  // Swagger/OpenAPI setup
+  const config = new DocumentBuilder()
+    .setTitle('Boardroom API')
+    .setDescription('Board meeting management platform API')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, document);
 
   // CORS configuration
   const allowedOrigins = [
@@ -50,5 +83,6 @@ async function bootstrap() {
 
   logger.log(`Application running on port ${port}`);
   logger.log(`API available at http://localhost:${port}/api/v1`);
+  logger.log(`API docs available at http://localhost:${port}/api/docs`);
 }
 bootstrap();
