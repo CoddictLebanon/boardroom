@@ -6,6 +6,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { CompaniesModule } from './companies/companies.module';
 import { MeetingsModule } from './meetings/meetings.module';
+import { AgendaItemsModule } from './agenda-items/agenda-items.module';
 import { ActionItemsModule } from './action-items/action-items.module';
 import { DocumentsModule } from './documents/documents.module';
 import { ResolutionsModule } from './resolutions/resolutions.module';
@@ -14,6 +15,7 @@ import { GatewayModule } from './gateway/gateway.module';
 import { InvitationsModule } from './invitations/invitations.module';
 import { EmailModule } from './email/email.module';
 import { MonthlyFinancialsModule } from './monthly-financials/monthly-financials.module';
+import { OkrsModule } from './okrs/okrs.module';
 
 @Module({
   imports: [
@@ -24,6 +26,7 @@ import { MonthlyFinancialsModule } from './monthly-financials/monthly-financials
     AuthModule,
     CompaniesModule,
     MeetingsModule,
+    AgendaItemsModule,
     ActionItemsModule,
     DocumentsModule,
     ResolutionsModule,
@@ -32,6 +35,7 @@ import { MonthlyFinancialsModule } from './monthly-financials/monthly-financials
     InvitationsModule,
     EmailModule,
     MonthlyFinancialsModule,
+    OkrsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
