@@ -30,6 +30,7 @@ model User {
   sentInvitations         Invitation[]
   createdAgendaItems      AgendaItem[]
   createdDecisions        Decision[]             @relation("DecisionCreator")
+  createdNotes            MeetingNote[]          @relation("NoteCreator")
 }
 
 // Companies (workspaces)
@@ -147,13 +148,14 @@ model Meeting {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
-  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  agendaItems AgendaItem[]
-  attendees   MeetingAttendee[]
-  documents   MeetingDocument[]
-  decisions   Decision[]
-  actionItems ActionItem[]
-  summary     MeetingSummary?
+  company      Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  agendaItems  AgendaItem[]
+  attendees    MeetingAttendee[]
+  documents    MeetingDocument[]
+  decisions    Decision[]
+  actionItems  ActionItem[]
+  summary      MeetingSummary?
+  meetingNotes MeetingNote[]
 
   @@index([companyId])
   @@index([scheduledAt])
@@ -214,6 +216,22 @@ model MeetingSummary {
   meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 }
 
+model MeetingNote {
+  id          String   @id @default(cuid())
+  meetingId   String
+  content     String
+  createdById String
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  meeting   Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  createdBy User    @relation("NoteCreator", fields: [createdById], references: [id])
+
+  @@index([meetingId])
+  @@index([createdById])
+}
+
 model MeetingTemplate {
   id               String   @id @default(cuid())
   companyId        String
@@ -242,6 +260,7 @@ model Decision {
   title        String
   description  String?
   outcome      DecisionOutcome?
+  order        Int              @default(0)
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
 
@@ -251,6 +270,7 @@ model Decision {
   votes      Vote[]
   resolution Resolution?
 
+  @@index([meetingId])
   @@index([createdById])
 }
 
@@ -295,6 +315,7 @@ model ActionItem {
   dueDate      DateTime?
   priority     Priority     @default(MEDIUM)
   status       ActionStatus @default(PENDING)
+  order        Int          @default(0)
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
