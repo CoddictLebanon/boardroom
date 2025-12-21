@@ -6,10 +6,14 @@ import { PrismaModule } from '../src/prisma/prisma.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { CompaniesModule } from '../src/companies/companies.module';
 import { MeetingsModule } from '../src/meetings/meetings.module';
+import { AgendaItemsModule } from '../src/agenda-items/agenda-items.module';
 import { ActionItemsModule } from '../src/action-items/action-items.module';
 import { DocumentsModule } from '../src/documents/documents.module';
 import { ResolutionsModule } from '../src/resolutions/resolutions.module';
 import { FinancialReportsModule } from '../src/financial-reports/financial-reports.module';
+import { OkrsModule } from '../src/okrs/okrs.module';
+import { GatewayModule } from '../src/gateway/gateway.module';
+import { PermissionsModule } from '../src/permissions/permissions.module';
 import { AppController } from '../src/app.controller';
 import { AppService } from '../src/app.service';
 import {
@@ -83,12 +87,16 @@ export async function createTestApp(): Promise<{
         isGlobal: true,
       }),
       PrismaModule,
+      PermissionsModule,
+      GatewayModule,
       CompaniesModule,
       MeetingsModule,
+      AgendaItemsModule,
       ActionItemsModule,
       DocumentsModule,
       ResolutionsModule,
       FinancialReportsModule,
+      OkrsModule,
     ],
     controllers: [AppController],
     providers: [
