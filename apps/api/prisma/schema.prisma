@@ -40,6 +40,7 @@ model Company {
   logo            String?
   timezone        String   @default("Asia/Dubai")
   fiscalYearStart Int      @default(1) // Month 1-12
+  currency        String   @default("USD")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -57,6 +58,7 @@ model Company {
   invitations             Invitation[]
   rolePermissions         RolePermission[]
   customRoles             CustomRole[]
+  okrPeriods              OkrPeriod[]
 }
 
 // Company membership with roles
@@ -639,4 +641,70 @@ model RolePermission {
   @@unique([companyId, role, permissionId])
   @@unique([companyId, customRoleId, permissionId])
   @@index([companyId])
+}
+
+// ==========================================
+// OKRs (Objectives & Key Results)
+// ==========================================
+
+model OkrPeriod {
+  id        String          @id @default(cuid())
+  companyId String
+  name      String          // e.g., "2025 Q2 Product OKRs"
+  startDate DateTime
+  endDate   DateTime
+  status    OkrPeriodStatus @default(OPEN)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  objectives Objective[]
+
+  @@index([companyId])
+  @@index([companyId, status])
+}
+
+enum OkrPeriodStatus {
+  OPEN
+  CLOSED
+}
+
+model Objective {
+  id        String   @id @default(cuid())
+  periodId  String
+  title     String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  period     OkrPeriod   @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  keyResults KeyResult[]
+
+  @@index([periodId])
+}
+
+model KeyResult {
+  id           String     @id @default(cuid())
+  objectiveId  String
+  title        String
+  metricType   MetricType @default(NUMERIC)
+  startValue   Decimal    @db.Decimal(15, 2)
+  targetValue  Decimal    @db.Decimal(15, 2)
+  currentValue Decimal    @db.Decimal(15, 2)
+  inverse      Boolean    @default(false)
+  comment      String?
+  order        Int        @default(0)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  objective Objective @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+
+  @@index([objectiveId])
+}
+
+enum MetricType {
+  NUMERIC
+  PERCENTAGE
+  CURRENCY
+  BOOLEAN
 }
