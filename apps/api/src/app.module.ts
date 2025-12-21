@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+// NOTE: Run `npm install @nestjs/throttler` then uncomment below to enable rate limiting
+// import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+// import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -14,14 +17,28 @@ import { GatewayModule } from './gateway/gateway.module';
 import { InvitationsModule } from './invitations/invitations.module';
 import { EmailModule } from './email/email.module';
 import { MonthlyFinancialsModule } from './monthly-financials/monthly-financials.module';
+import { PermissionsModule } from './permissions/permissions.module';
+import { CustomRolesModule } from './custom-roles/custom-roles.module';
+import { MeetingNotesModule } from './meeting-notes/meeting-notes.module';
+import { AgendaItemsModule } from './agenda-items/agenda-items.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    // NOTE: Run `npm install @nestjs/throttler` then uncomment below to enable rate limiting
+    // Rate limiting: 100 requests per minute per IP
+    // ThrottlerModule.forRoot([
+    //   {
+    //     ttl: 60000,
+    //     limit: 100,
+    //   },
+    // ]),
     PrismaModule,
     AuthModule,
+    PermissionsModule,
+    CustomRolesModule,
     CompaniesModule,
     MeetingsModule,
     ActionItemsModule,
@@ -32,8 +49,17 @@ import { MonthlyFinancialsModule } from './monthly-financials/monthly-financials
     InvitationsModule,
     EmailModule,
     MonthlyFinancialsModule,
+    MeetingNotesModule,
+    AgendaItemsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    // NOTE: Uncomment after installing @nestjs/throttler
+    // {
+    //   provide: APP_GUARD,
+    //   useClass: ThrottlerGuard,
+    // },
+  ],
 })
 export class AppModule {}

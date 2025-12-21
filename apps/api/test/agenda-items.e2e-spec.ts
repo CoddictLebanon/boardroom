@@ -73,7 +73,7 @@ describe('AgendaItemsController (e2e)', () => {
       expect(response.body.title).toBe('Financial Review');
       expect(response.body.description).toBe('Review Q4 results');
       expect(response.body.duration).toBe(30);
-      expect(response.body.order).toBe(0);
+      expect(response.body.order).toBe(1);
     });
 
     it('should auto-increment order for new items', async () => {
@@ -87,7 +87,7 @@ describe('AgendaItemsController (e2e)', () => {
         .send({ title: 'Second Item' })
         .expect(201);
 
-      expect(response.body.order).toBe(1);
+      expect(response.body.order).toBe(2);
     });
 
     it('should fail with empty title', async () => {
@@ -111,8 +111,8 @@ describe('AgendaItemsController (e2e)', () => {
     beforeEach(async () => {
       await prisma.agendaItem.createMany({
         data: [
-          { meetingId, title: 'Item A', order: 0, createdById: TEST_USER.id },
-          { meetingId, title: 'Item B', order: 1, createdById: TEST_USER.id },
+          { meetingId, title: 'Item A', order: 1, createdById: TEST_USER.id },
+          { meetingId, title: 'Item B', order: 2, createdById: TEST_USER.id },
         ],
       });
     });
@@ -133,7 +133,7 @@ describe('AgendaItemsController (e2e)', () => {
 
     beforeEach(async () => {
       const item = await prisma.agendaItem.create({
-        data: { meetingId, title: 'Original Title', order: 0, createdById: TEST_USER.id },
+        data: { meetingId, title: 'Original Title', order: 1, createdById: TEST_USER.id },
       });
       itemId = item.id;
     });
@@ -161,7 +161,7 @@ describe('AgendaItemsController (e2e)', () => {
 
     beforeEach(async () => {
       const item = await prisma.agendaItem.create({
-        data: { meetingId, title: 'To Delete', order: 0, createdById: TEST_USER.id },
+        data: { meetingId, title: 'To Delete', order: 1, createdById: TEST_USER.id },
       });
       itemId = item.id;
     });
@@ -181,9 +181,9 @@ describe('AgendaItemsController (e2e)', () => {
 
     beforeEach(async () => {
       const items = await Promise.all([
-        prisma.agendaItem.create({ data: { meetingId, title: 'A', order: 0, createdById: TEST_USER.id } }),
-        prisma.agendaItem.create({ data: { meetingId, title: 'B', order: 1, createdById: TEST_USER.id } }),
-        prisma.agendaItem.create({ data: { meetingId, title: 'C', order: 2, createdById: TEST_USER.id } }),
+        prisma.agendaItem.create({ data: { meetingId, title: 'A', order: 1, createdById: TEST_USER.id } }),
+        prisma.agendaItem.create({ data: { meetingId, title: 'B', order: 2, createdById: TEST_USER.id } }),
+        prisma.agendaItem.create({ data: { meetingId, title: 'C', order: 3, createdById: TEST_USER.id } }),
       ]);
       itemIds = items.map(i => i.id);
     });

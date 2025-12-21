@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { APP_GUARD, Reflector } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
+import { resolve } from 'path';
 import { PrismaModule } from '../src/prisma/prisma.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { CompaniesModule } from '../src/companies/companies.module';
@@ -10,6 +11,14 @@ import { ActionItemsModule } from '../src/action-items/action-items.module';
 import { DocumentsModule } from '../src/documents/documents.module';
 import { ResolutionsModule } from '../src/resolutions/resolutions.module';
 import { FinancialReportsModule } from '../src/financial-reports/financial-reports.module';
+import { PermissionsModule } from '../src/permissions/permissions.module';
+import { CustomRolesModule } from '../src/custom-roles/custom-roles.module';
+import { InvitationsModule } from '../src/invitations/invitations.module';
+import { MonthlyFinancialsModule } from '../src/monthly-financials/monthly-financials.module';
+import { EmailModule } from '../src/email/email.module';
+import { MeetingNotesModule } from '../src/meeting-notes/meeting-notes.module';
+import { AgendaItemsModule } from '../src/agenda-items/agenda-items.module';
+import { GatewayModule } from '../src/gateway/gateway.module';
 import { AppController } from '../src/app.controller';
 import { AppService } from '../src/app.service';
 import {
@@ -18,6 +27,9 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { IS_PUBLIC_KEY } from '../src/auth/decorators/public.decorator';
+import { PERMISSIONS_KEY } from '../src/permissions/require-permission.decorator';
+import { ClerkAuthGuard } from '../src/auth/guards/clerk-auth.guard';
+import { PermissionGuard } from '../src/permissions/permission.guard';
 
 // Mock user data for testing
 export const TEST_USER = {
@@ -34,7 +46,7 @@ export const TEST_USER_2 = {
   lastName: 'User',
 };
 
-// Mock auth guard that always authenticates with test user
+// Mock auth guard that always authenticates with test user and bypasses permission checks
 @Injectable()
 export class MockAuthGuard implements CanActivate {
   private mockUserId: string = TEST_USER.id;
@@ -42,6 +54,10 @@ export class MockAuthGuard implements CanActivate {
 
   setMockUserId(userId: string) {
     this.mockUserId = userId;
+  }
+
+  getMockUserId(): string {
+    return this.mockUserId;
   }
 
   canActivate(context: ExecutionContext): boolean {
@@ -68,6 +84,14 @@ export class MockAuthGuard implements CanActivate {
   }
 }
 
+// Mock permission guard that always allows (for E2E tests we test permissions separately)
+@Injectable()
+export class MockPermissionGuard implements CanActivate {
+  canActivate(): boolean {
+    return true;
+  }
+}
+
 // Create a test application with mocked auth
 export async function createTestApp(): Promise<{
   app: INestApplication;
@@ -75,20 +99,30 @@ export async function createTestApp(): Promise<{
   mockAuthGuard: MockAuthGuard;
 }> {
   const mockAuthGuard = new MockAuthGuard();
+  const mockPermissionGuard = new MockPermissionGuard();
 
-  // Build test module without AuthModule - use mock guard instead
+  // Build test module without AuthModule - use mock guards instead
   const moduleFixture: TestingModule = await Test.createTestingModule({
     imports: [
       ConfigModule.forRoot({
         isGlobal: true,
+        envFilePath: resolve(__dirname, '../.env.test'),
       }),
       PrismaModule,
+      EmailModule,
+      PermissionsModule,
+      CustomRolesModule,
       CompaniesModule,
       MeetingsModule,
       ActionItemsModule,
       DocumentsModule,
       ResolutionsModule,
       FinancialReportsModule,
+      MonthlyFinancialsModule,
+      InvitationsModule,
+      GatewayModule,
+      MeetingNotesModule,
+      AgendaItemsModule,
     ],
     controllers: [AppController],
     providers: [
@@ -98,7 +132,12 @@ export async function createTestApp(): Promise<{
         useValue: mockAuthGuard,
       },
     ],
-  }).compile();
+  })
+    .overrideGuard(ClerkAuthGuard)
+    .useValue(mockAuthGuard)
+    .overrideGuard(PermissionGuard)
+    .useValue(mockPermissionGuard)
+    .compile();
 
   const app = moduleFixture.createNestApplication();
 

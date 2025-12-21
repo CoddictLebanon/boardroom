@@ -33,7 +33,7 @@ export class AgendaItemsService {
       orderBy: { order: 'desc' },
       select: { order: true },
     });
-    const nextOrder = (maxOrderItem?.order ?? -1) + 1;
+    const nextOrder = (maxOrderItem?.order || 0) + 1;
 
     const item = await this.prisma.agendaItem.create({
       data: {
@@ -155,7 +155,7 @@ export class AgendaItemsService {
     const updates = itemIds.map((itemId, index) =>
       this.prisma.agendaItem.update({
         where: { id: itemId },
-        data: { order: index },
+        data: { order: index + 1 },
         include: {
           createdBy: { select: userSelect },
         },
