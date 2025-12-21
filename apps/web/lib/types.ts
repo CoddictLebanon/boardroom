@@ -7,6 +7,22 @@ export interface Company {
   members?: CompanyMember[];
 }
 
+export interface MeetingNote {
+  id: string;
+  meetingId: string;
+  content: string;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string;
+    imageUrl?: string;
+  };
+}
+
 export interface Meeting {
   id: string;
   companyId: string;
@@ -27,6 +43,8 @@ export interface Meeting {
   attendees?: MeetingAttendee[];
   decisions?: Decision[];
   documents?: MeetingDocument[];
+  meetingNotes?: MeetingNote[];
+  actionItems?: ActionItem[];
 }
 
 export interface MeetingDocument {
@@ -163,4 +181,48 @@ export interface FinancialReport {
   fiscalYear: number;
   period: string;
   status: ReportStatus;
+}
+
+// OKR Types
+export type OkrPeriodStatus = "OPEN" | "CLOSED";
+export type MetricType = "NUMERIC" | "PERCENTAGE" | "CURRENCY" | "BOOLEAN";
+
+export interface KeyResult {
+  id: string;
+  objectiveId: string;
+  title: string;
+  metricType: MetricType;
+  startValue: number;
+  targetValue: number;
+  currentValue: number;
+  inverse: boolean;
+  comment: string | null;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+  progress: number;
+}
+
+export interface Objective {
+  id: string;
+  periodId: string;
+  title: string;
+  order: number;
+  createdAt: string;
+  updatedAt: string;
+  keyResults?: KeyResult[];
+  progress: number;
+}
+
+export interface OkrPeriod {
+  id: string;
+  companyId: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  status: OkrPeriodStatus;
+  createdAt: string;
+  updatedAt: string;
+  objectives?: Objective[];
+  score: number;
 }
