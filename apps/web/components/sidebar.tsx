@@ -12,9 +12,11 @@ import {
   Vote,
   DollarSign,
   Settings,
+  Target,
 } from "lucide-react";
 import { CompanySwitcher } from "./company-switcher";
 import { UserButton } from "@clerk/nextjs";
+import { usePermissions } from "@/lib/permissions";
 
 interface SidebarProps {
   companyId: string;
@@ -23,16 +25,24 @@ interface SidebarProps {
 export function Sidebar({ companyId }: SidebarProps) {
   const pathname = usePathname();
   const basePath = `/companies/${companyId}`;
+  const { hasPermission } = usePermissions();
 
-  const navigation = [
-    { name: "Dashboard", href: `${basePath}/dashboard`, icon: LayoutDashboard },
-    { name: "Meetings", href: `${basePath}/meetings`, icon: Calendar },
-    { name: "Action Items", href: `${basePath}/action-items`, icon: CheckSquare },
-    { name: "Resolutions", href: `${basePath}/resolutions`, icon: Vote },
-    { name: "Documents", href: `${basePath}/documents`, icon: FileText },
-    { name: "Financials", href: `${basePath}/financials`, icon: DollarSign },
-    { name: "Board Members", href: `${basePath}/members`, icon: Users },
+  // Navigation items with required permissions
+  const allNavigation = [
+    { name: "Dashboard", href: `${basePath}/dashboard`, icon: LayoutDashboard, permission: null },
+    { name: "Meetings", href: `${basePath}/meetings`, icon: Calendar, permission: "meetings.view" },
+    { name: "Action Items", href: `${basePath}/action-items`, icon: CheckSquare, permission: "action_items.view" },
+    { name: "Resolutions", href: `${basePath}/resolutions`, icon: Vote, permission: "resolutions.view" },
+    { name: "Documents", href: `${basePath}/documents`, icon: FileText, permission: "documents.view" },
+    { name: "Financials", href: `${basePath}/financials`, icon: DollarSign, permission: "financials.view" },
+    { name: "OKRs", href: `${basePath}/okrs`, icon: Target, permission: "okrs.view" },
+    { name: "Board Members", href: `${basePath}/members`, icon: Users, permission: "members.view" },
   ];
+
+  // Filter navigation based on permissions
+  const navigation = allNavigation.filter(
+    (item) => item.permission === null || hasPermission(item.permission)
+  );
 
   const secondaryNavigation = [
     { name: "Settings", href: `${basePath}/settings`, icon: Settings },
