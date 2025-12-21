@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, Logger, Inject, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MeetingsGateway } from '../gateway/meetings.gateway';
 import { CreateAgendaItemDto, UpdateAgendaItemDto } from './dto';
@@ -17,7 +17,7 @@ export class AgendaItemsService {
 
   constructor(
     private prisma: PrismaService,
-    private meetingsGateway: MeetingsGateway,
+    @Optional() private meetingsGateway?: MeetingsGateway,
   ) {}
 
   async create(
@@ -50,7 +50,7 @@ export class AgendaItemsService {
     });
 
     try {
-      this.meetingsGateway.emitToMeeting(meetingId, 'agenda:created', item);
+      this.meetingsGateway?.emitToMeeting(meetingId, 'agenda:created', item);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Failed to emit agenda:created event: ${errorMessage}`);
@@ -105,7 +105,7 @@ export class AgendaItemsService {
     });
 
     try {
-      this.meetingsGateway.emitToMeeting(meetingId, 'agenda:updated', item);
+      this.meetingsGateway?.emitToMeeting(meetingId, 'agenda:updated', item);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Failed to emit agenda:updated event: ${errorMessage}`);
@@ -135,7 +135,7 @@ export class AgendaItemsService {
     });
 
     try {
-      this.meetingsGateway.emitToMeeting(meetingId, 'agenda:deleted', { id: itemId });
+      this.meetingsGateway?.emitToMeeting(meetingId, 'agenda:deleted', { id: itemId });
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Failed to emit agenda:deleted event: ${errorMessage}`);
@@ -165,7 +165,7 @@ export class AgendaItemsService {
     const items = await this.prisma.$transaction(updates);
 
     try {
-      this.meetingsGateway.emitToMeeting(meetingId, 'agenda:reordered', { itemIds });
+      this.meetingsGateway?.emitToMeeting(meetingId, 'agenda:reordered', { itemIds });
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Failed to emit agenda:reordered event: ${errorMessage}`);

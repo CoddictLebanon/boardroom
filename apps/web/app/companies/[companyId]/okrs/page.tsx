@@ -163,17 +163,38 @@ export default function OKRsPage() {
 
   // Period CRUD operations
   const handleCreatePeriod = async () => {
+    // Validate form
+    if (!periodForm.name.trim()) {
+      alert("Please enter a period name");
+      return;
+    }
+    if (!periodForm.startDate || !periodForm.endDate) {
+      alert("Please select start and end dates");
+      return;
+    }
+
     try {
       const token = await getToken();
-      if (!token) return;
+      if (!token) {
+        alert("Authentication error. Please sign in again.");
+        return;
+      }
 
-      const newPeriod = await createOkrPeriod(companyId, periodForm, token);
+      // Convert dates to ISO format
+      const data = {
+        name: periodForm.name.trim(),
+        startDate: new Date(periodForm.startDate).toISOString(),
+        endDate: new Date(periodForm.endDate).toISOString(),
+      };
+
+      const newPeriod = await createOkrPeriod(companyId, data, token);
       setPeriods([...periods, newPeriod]);
       setSelectedPeriodId(newPeriod.id);
       setPeriodDialogOpen(false);
       setPeriodForm({ name: "", startDate: "", endDate: "" });
     } catch (error) {
       console.error("Error creating period:", error);
+      alert(error instanceof Error ? error.message : "Failed to create period");
     }
   };
 
@@ -182,15 +203,26 @@ export default function OKRsPage() {
 
     try {
       const token = await getToken();
-      if (!token) return;
+      if (!token) {
+        alert("Authentication error. Please sign in again.");
+        return;
+      }
 
-      const { id, ...data } = periodForm;
+      const { id, ...formData } = periodForm;
+      // Convert dates to ISO format if provided
+      const data = {
+        name: formData.name?.trim() || undefined,
+        startDate: formData.startDate ? new Date(formData.startDate).toISOString() : undefined,
+        endDate: formData.endDate ? new Date(formData.endDate).toISOString() : undefined,
+      };
+
       const updated = await updateOkrPeriod(companyId, id, data, token);
       setPeriods(periods.map((p) => (p.id === id ? updated : p)));
       setPeriodDialogOpen(false);
       setPeriodForm({ name: "", startDate: "", endDate: "" });
     } catch (error) {
       console.error("Error updating period:", error);
+      alert(error instanceof Error ? error.message : "Failed to update period");
     }
   };
 
