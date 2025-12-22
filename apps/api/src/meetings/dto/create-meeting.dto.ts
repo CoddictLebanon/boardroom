@@ -1,13 +1,15 @@
-import { IsString, IsNotEmpty, IsOptional, IsDateString, IsInt, Min, IsArray } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsDateString, IsInt, Min, IsArray, MaxLength, IsUrl } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateMeetingDto {
   @IsString()
   @IsNotEmpty()
+  @MaxLength(255)
   title: string;
 
   @IsString()
   @IsOptional()
+  @MaxLength(5000)
   description?: string;
 
   @IsDateString()
@@ -21,10 +23,13 @@ export class CreateMeetingDto {
 
   @IsString()
   @IsOptional()
+  @MaxLength(500)
   location?: string;
 
   @IsString()
   @IsOptional()
+  @MaxLength(500)
+  @IsUrl({}, { message: 'videoLink must be a valid URL' })
   videoLink?: string;
 
   @IsArray()

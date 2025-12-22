@@ -10,6 +10,7 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CompaniesService } from './companies.service';
 import {
   CreateCompanyDto,
@@ -19,18 +20,17 @@ import {
 } from './dto';
 import { CurrentUser } from '../auth/decorators';
 
+@ApiTags('companies')
+@ApiBearerAuth()
 @Controller('companies')
 export class CompaniesController {
   private readonly logger = new Logger(CompaniesController.name);
 
   constructor(private readonly companiesService: CompaniesService) {}
 
-  /**
-   * Create a new company
-   * POST /companies
-   */
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a new company' })
   async create(
     @CurrentUser('userId') userId: string,
     @Body() createCompanyDto: CreateCompanyDto,
@@ -39,21 +39,15 @@ export class CompaniesController {
     return this.companiesService.create(userId, createCompanyDto);
   }
 
-  /**
-   * Get all companies for the current user
-   * GET /companies
-   */
   @Get()
+  @ApiOperation({ summary: 'Get all companies for the current user' })
   async findUserCompanies(@CurrentUser('userId') userId: string) {
     this.logger.log(`GET /companies - userId: ${userId}`);
     return this.companiesService.findUserCompanies(userId);
   }
 
-  /**
-   * Get a specific company by ID
-   * GET /companies/:id
-   */
   @Get(':id')
+  @ApiOperation({ summary: 'Get a specific company by ID' })
   async findOne(
     @Param('id') companyId: string,
     @CurrentUser('userId') userId: string,
@@ -61,11 +55,8 @@ export class CompaniesController {
     return this.companiesService.findOne(companyId, userId);
   }
 
-  /**
-   * Get dashboard statistics for a company
-   * GET /companies/:id/dashboard
-   */
   @Get(':id/dashboard')
+  @ApiOperation({ summary: 'Get dashboard statistics for a company' })
   async getDashboardStats(
     @Param('id') companyId: string,
     @CurrentUser('userId') userId: string,
@@ -73,11 +64,8 @@ export class CompaniesController {
     return this.companiesService.getDashboardStats(companyId, userId);
   }
 
-  /**
-   * Update a company
-   * PUT /companies/:id
-   */
   @Put(':id')
+  @ApiOperation({ summary: 'Update company details' })
   async update(
     @Param('id') companyId: string,
     @CurrentUser('userId') userId: string,
@@ -86,12 +74,9 @@ export class CompaniesController {
     return this.companiesService.update(companyId, userId, updateCompanyDto);
   }
 
-  /**
-   * Add a member to a company
-   * POST /companies/:id/members
-   */
   @Post(':id/members')
   @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Add a member to a company' })
   async addMember(
     @Param('id') companyId: string,
     @CurrentUser('userId') userId: string,
@@ -100,11 +85,8 @@ export class CompaniesController {
     return this.companiesService.addMember(companyId, userId, addMemberDto);
   }
 
-  /**
-   * Update a member's role or details
-   * PUT /companies/:id/members/:memberId
-   */
   @Put(':id/members/:memberId')
+  @ApiOperation({ summary: "Update a member's role or details" })
   async updateMember(
     @Param('id') companyId: string,
     @Param('memberId') memberId: string,
@@ -119,12 +101,9 @@ export class CompaniesController {
     );
   }
 
-  /**
-   * Remove a member from a company
-   * DELETE /companies/:id/members/:memberId
-   */
   @Delete(':id/members/:memberId')
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Remove a member from a company' })
   async removeMember(
     @Param('id') companyId: string,
     @Param('memberId') memberId: string,

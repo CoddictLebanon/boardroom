@@ -50,7 +50,7 @@ describe('MeetingNotesController (e2e)', () => {
       data: {
         userId: TEST_USER_2.id,
         companyId: companyId,
-        role: 'MEMBER',
+        role: 'BOARD_MEMBER',
         status: 'ACTIVE',
       },
     });

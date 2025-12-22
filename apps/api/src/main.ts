@@ -25,12 +25,11 @@ async function bootstrap() {
     rawBody: true, // Enable raw body for webhook signature verification
   });
 
-  // Global exception filter
-  app.useGlobalFilters(new GlobalExceptionFilter());
-
-  // Sentry exception filter for server errors
+  // Global exception filter - use Sentry-enabled filter if DSN is configured
   if (process.env.SENTRY_DSN) {
     app.useGlobalFilters(new SentryExceptionFilter());
+  } else {
+    app.useGlobalFilters(new GlobalExceptionFilter());
   }
 
   // API versioning

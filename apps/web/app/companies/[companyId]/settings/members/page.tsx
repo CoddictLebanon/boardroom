@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Users, Mail, Loader2, UserPlus, X, Clock, MoreHorizontal, UserMinus } from "lucide-react";
+import { Users, Mail, Loader2, UserPlus, X, Clock, MoreHorizontal, UserMinus, ArrowLeft } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,7 +30,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@clerk/nextjs";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { usePermission } from "@/lib/permissions";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
@@ -64,6 +64,7 @@ interface Member {
 export default function MembersPage() {
   const { getToken } = useAuth();
   const params = useParams();
+  const router = useRouter();
   const companyId = params.companyId as string;
 
   const canInvite = usePermission("members.invite");
@@ -237,9 +238,18 @@ export default function MembersPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Board Members</h1>
-          <p className="text-muted-foreground">Manage your board member directory</p>
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => router.push(`/companies/${companyId}/settings`)}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Members</h1>
+            <p className="text-muted-foreground">Manage your company members</p>
+          </div>
         </div>
         {canInvite && (
           <Button onClick={() => setDialogOpen(true)}>
@@ -346,7 +356,7 @@ export default function MembersPage() {
             </div>
             <div>
               <CardTitle>All Members</CardTitle>
-              <CardDescription>Board members and their roles</CardDescription>
+              <CardDescription>Company members and their roles</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -435,9 +445,9 @@ export default function MembersPage() {
       }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Invite Board Member</DialogTitle>
+            <DialogTitle>Invite Member</DialogTitle>
             <DialogDescription>
-              Send an invitation email to join your board.
+              Send an invitation email to join your company.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">

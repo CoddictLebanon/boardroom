@@ -1,15 +1,17 @@
-import { IsString, IsOptional, IsEnum, IsArray } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsArray, MaxLength, IsUUID, ArrayMaxSize } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { DocumentType } from '@prisma/client';
 
 export class CreateDocumentDto {
   @ApiProperty({ description: 'Document name' })
   @IsString()
+  @MaxLength(255)
   name: string;
 
   @ApiPropertyOptional({ description: 'Document description' })
   @IsString()
   @IsOptional()
+  @MaxLength(2000)
   description?: string;
 
   @ApiProperty({ enum: DocumentType, description: 'Document type' })
@@ -19,11 +21,13 @@ export class CreateDocumentDto {
   @ApiPropertyOptional({ description: 'Folder ID' })
   @IsString()
   @IsOptional()
+  @IsUUID()
   folderId?: string;
 
   @ApiPropertyOptional({ description: 'Meeting ID to attach this document to' })
   @IsString()
   @IsOptional()
+  @IsUUID()
   meetingId?: string;
 }
 
@@ -31,11 +35,13 @@ export class UpdateDocumentDto {
   @ApiPropertyOptional({ description: 'Document name' })
   @IsString()
   @IsOptional()
+  @MaxLength(255)
   name?: string;
 
   @ApiPropertyOptional({ description: 'Document description' })
   @IsString()
   @IsOptional()
+  @MaxLength(2000)
   description?: string;
 
   @ApiPropertyOptional({ enum: DocumentType, description: 'Document type' })
@@ -46,6 +52,7 @@ export class UpdateDocumentDto {
   @ApiPropertyOptional({ description: 'Folder ID' })
   @IsString()
   @IsOptional()
+  @IsUUID()
   folderId?: string;
 }
 
@@ -53,6 +60,8 @@ export class AddTagsDto {
   @ApiProperty({ description: 'Tags to add', type: [String] })
   @IsArray()
   @IsString({ each: true })
+  @ArrayMaxSize(20)
+  @MaxLength(50, { each: true })
   tags: string[];
 }
 

@@ -11,17 +11,23 @@ import {
   UsePipes,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import { FinancialReportsService } from './financial-reports.service';
 import { CreateFinancialReportDto, UpdateFinancialReportDto } from './dto';
 import { FinancialReportType, ReportStatus } from '@prisma/client';
 import { CurrentUser } from '../auth/decorators';
+import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
+import { PermissionGuard } from '../permissions/permission.guard';
+import { RequirePermission } from '../permissions/require-permission.decorator';
 
 @Controller()
+@UseGuards(ClerkAuthGuard, PermissionGuard)
 export class FinancialReportsController {
   constructor(private readonly financialReportsService: FinancialReportsService) {}
 
   @Post('companies/:companyId/financial-reports')
+  @RequirePermission('financials.edit')
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
   async create(
     @Param('companyId') companyId: string,
@@ -31,6 +37,7 @@ export class FinancialReportsController {
   }
 
   @Get('companies/:companyId/financial-reports')
+  @RequirePermission('financials.view')
   async findAll(
     @Param('companyId') companyId: string,
     @Query('type') type?: FinancialReportType,
@@ -48,38 +55,54 @@ export class FinancialReportsController {
     return this.financialReportsService.findAll(companyId, filters);
   }
 
-  @Get('financial-reports/:id')
-  async findOne(@Param('id') id: string) {
-    return this.financialReportsService.findOne(id);
+  @Get('companies/:companyId/financial-reports/:id')
+  @RequirePermission('financials.view')
+  async findOne(
+    @Param('companyId') companyId: string,
+    @Param('id') id: string,
+  ) {
+    return this.financialReportsService.findOne(id, companyId);
   }
 
-  @Put('financial-reports/:id')
+  @Put('companies/:companyId/financial-reports/:id')
+  @RequirePermission('financials.edit')
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
   async update(
+    @Param('companyId') companyId: string,
     @Param('id') id: string,
     @Body() updateDto: UpdateFinancialReportDto,
   ) {
-    return this.financialReportsService.update(id, updateDto);
+    return this.financialReportsService.update(id, companyId, updateDto);
   }
 
-  @Put('financial-reports/:id/finalize')
+  @Put('companies/:companyId/financial-reports/:id/finalize')
+  @RequirePermission('financials.edit')
   @HttpCode(HttpStatus.OK)
-  async finalize(@Param('id') id: string) {
-    return this.financialReportsService.finalize(id);
+  async finalize(
+    @Param('companyId') companyId: string,
+    @Param('id') id: string,
+  ) {
+    return this.financialReportsService.finalize(id, companyId);
   }
 
-  @Delete('financial-reports/:id')
+  @Delete('companies/:companyId/financial-reports/:id')
+  @RequirePermission('financials.delete')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param('id') id: string) {
-    await this.financialReportsService.remove(id);
+  async remove(
+    @Param('companyId') companyId: string,
+    @Param('id') id: string,
+  ) {
+    await this.financialReportsService.remove(id, companyId);
   }
 
-  @Post('financial-reports/:id/upload')
+  @Post('companies/:companyId/financial-reports/:id/upload')
+  @RequirePermission('financials.edit')
   @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
   async uploadFile(
+    @Param('companyId') companyId: string,
     @Param('id') id: string,
     @Body('storageKey') storageKey: string,
   ) {
-    return this.financialReportsService.uploadFile(id, storageKey);
+    return this.financialReportsService.uploadFile(id, companyId, storageKey);
   }
 }

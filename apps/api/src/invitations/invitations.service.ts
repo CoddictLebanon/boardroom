@@ -140,9 +140,9 @@ export class InvitationsService {
     });
   }
 
-  async revokeInvitation(invitationId: string, userId: string) {
-    const invitation = await this.prisma.invitation.findUnique({
-      where: { id: invitationId },
+  async revokeInvitation(invitationId: string, companyId: string, userId: string) {
+    const invitation = await this.prisma.invitation.findFirst({
+      where: { id: invitationId, companyId },
     });
 
     if (!invitation) {
@@ -152,7 +152,7 @@ export class InvitationsService {
     // Verify user has permission
     const membership = await this.prisma.companyMember.findUnique({
       where: {
-        userId_companyId: { userId, companyId: invitation.companyId },
+        userId_companyId: { userId, companyId },
       },
     });
 

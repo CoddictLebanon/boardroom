@@ -160,7 +160,7 @@ describe('Financial Reports API (e2e)', () => {
     });
   });
 
-  describe('GET /api/v1/financial-reports/:id', () => {
+  describe('GET /api/v1/companies/:companyId/financial-reports/:id', () => {
     it('should get report details', async () => {
       const report = await prisma.financialReport.create({
         data: {
@@ -174,7 +174,7 @@ describe('Financial Reports API (e2e)', () => {
       });
 
       const response = await request(app.getHttpServer())
-        .get(`/api/v1/financial-reports/${report.id}`)
+        .get(`/api/v1/companies/${companyId}/financial-reports/${report.id}`)
         .expect(200);
 
       expect(response.body.type).toBe('CASH_FLOW');
@@ -183,12 +183,12 @@ describe('Financial Reports API (e2e)', () => {
 
     it('should return 404 for non-existent report', async () => {
       await request(app.getHttpServer())
-        .get('/api/v1/financial-reports/non-existent-id')
+        .get(`/api/v1/companies/${companyId}/financial-reports/non-existent-id`)
         .expect(404);
     });
   });
 
-  describe('PUT /api/v1/financial-reports/:id', () => {
+  describe('PUT /api/v1/companies/:companyId/financial-reports/:id', () => {
     it('should update report data', async () => {
       const report = await prisma.financialReport.create({
         data: {
@@ -202,7 +202,7 @@ describe('Financial Reports API (e2e)', () => {
       });
 
       const response = await request(app.getHttpServer())
-        .put(`/api/v1/financial-reports/${report.id}`)
+        .put(`/api/v1/companies/${companyId}/financial-reports/${report.id}`)
         .send({
           data: { revenue: 120000, expenses: 80000 },
         })
@@ -212,7 +212,7 @@ describe('Financial Reports API (e2e)', () => {
     });
   });
 
-  describe('PUT /api/v1/financial-reports/:id/finalize', () => {
+  describe('PUT /api/v1/companies/:companyId/financial-reports/:id/finalize', () => {
     it('should finalize a draft report', async () => {
       const report = await prisma.financialReport.create({
         data: {
@@ -226,14 +226,14 @@ describe('Financial Reports API (e2e)', () => {
       });
 
       const response = await request(app.getHttpServer())
-        .put(`/api/v1/financial-reports/${report.id}/finalize`)
+        .put(`/api/v1/companies/${companyId}/financial-reports/${report.id}/finalize`)
         .expect(200);
 
       expect(response.body.status).toBe('FINAL');
     });
   });
 
-  describe('DELETE /api/v1/financial-reports/:id', () => {
+  describe('DELETE /api/v1/companies/:companyId/financial-reports/:id', () => {
     it('should delete a report', async () => {
       const report = await prisma.financialReport.create({
         data: {
@@ -247,7 +247,7 @@ describe('Financial Reports API (e2e)', () => {
       });
 
       await request(app.getHttpServer())
-        .delete(`/api/v1/financial-reports/${report.id}`)
+        .delete(`/api/v1/companies/${companyId}/financial-reports/${report.id}`)
         .expect(204);
 
       // Verify deletion

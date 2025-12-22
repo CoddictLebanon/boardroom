@@ -8,34 +8,23 @@ import {
   OnGatewayDisconnect,
   WsException,
 } from '@nestjs/websockets';
-import { Logger } from '@nestjs/common';
+import { Logger, UsePipes } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { verifyToken } from '@clerk/backend';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { WsValidationPipe } from './ws-validation.pipe';
+import {
+  JoinMeetingDto,
+  LeaveMeetingDto,
+  CastVoteDto,
+  UpdateAttendanceDto,
+  UpdateMeetingStatusDto,
+} from './dto';
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
   sessionId?: string;
-}
-
-interface JoinMeetingPayload {
-  meetingId: string;
-}
-
-interface VotePayload {
-  decisionId: string;
-  vote: 'FOR' | 'AGAINST' | 'ABSTAIN';
-}
-
-interface AttendancePayload {
-  meetingId: string;
-  isPresent: boolean;
-}
-
-interface MeetingStatusPayload {
-  meetingId: string;
-  status: 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 }
 
 @WebSocketGateway({
@@ -126,8 +115,9 @@ export class MeetingsGateway
   }
 
   @SubscribeMessage('meeting:join')
+  @UsePipes(WsValidationPipe)
   async handleJoinMeeting(
-    @MessageBody() payload: JoinMeetingPayload,
+    @MessageBody() payload: JoinMeetingDto,
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     if (!client.userId) {
@@ -174,8 +164,9 @@ export class MeetingsGateway
   }
 
   @SubscribeMessage('meeting:leave')
+  @UsePipes(WsValidationPipe)
   async handleLeaveMeeting(
-    @MessageBody() payload: JoinMeetingPayload,
+    @MessageBody() payload: LeaveMeetingDto,
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     if (!client.userId) {
@@ -206,8 +197,9 @@ export class MeetingsGateway
   }
 
   @SubscribeMessage('vote:cast')
+  @UsePipes(WsValidationPipe)
   async handleCastVote(
-    @MessageBody() payload: VotePayload,
+    @MessageBody() payload: CastVoteDto,
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     if (!client.userId) {
@@ -292,8 +284,9 @@ export class MeetingsGateway
   }
 
   @SubscribeMessage('attendance:update')
+  @UsePipes(WsValidationPipe)
   async handleAttendanceUpdate(
-    @MessageBody() payload: AttendancePayload,
+    @MessageBody() payload: UpdateAttendanceDto,
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     if (!client.userId) {
@@ -362,8 +355,9 @@ export class MeetingsGateway
   }
 
   @SubscribeMessage('meeting:status')
+  @UsePipes(WsValidationPipe)
   async handleMeetingStatusUpdate(
-    @MessageBody() payload: MeetingStatusPayload,
+    @MessageBody() payload: UpdateMeetingStatusDto,
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     if (!client.userId) {

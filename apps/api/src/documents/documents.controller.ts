@@ -15,6 +15,7 @@ import {
   Res,
   NotFoundException,
   UseGuards,
+  ForbiddenException,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -244,14 +245,35 @@ export class DocumentsController {
 
   // ==========================================
   // DIRECT FILE DOWNLOAD (for local filesystem)
+  // Uses signed URLs for security - no authentication required
+  // but URL must have valid signature and not be expired
   // ==========================================
 
   @Public()
   @Get('documents/download/*path')
-  @ApiOperation({ summary: 'Download a file directly from local storage' })
-  downloadFile(@Param('path') path: string[], @Res() res: Response) {
+  @ApiOperation({ summary: 'Download a file directly from local storage (requires signed URL)' })
+  downloadFile(
+    @Param('path') path: string[],
+    @Query('expires') expires: string,
+    @Query('signature') signature: string,
+    @Res() res: Response,
+  ) {
     const key = Array.isArray(path) ? path.join('/') : path;
     const decodedKey = decodeURIComponent(key);
+
+    // Verify the signed URL
+    if (!expires || !signature) {
+      throw new ForbiddenException('Invalid download URL - missing signature');
+    }
+
+    const expiresNum = parseInt(expires, 10);
+    if (isNaN(expiresNum)) {
+      throw new ForbiddenException('Invalid download URL - invalid expiration');
+    }
+
+    if (!this.storageService.verifySignature(decodedKey, expiresNum, signature)) {
+      throw new ForbiddenException('Invalid or expired download URL');
+    }
 
     if (!this.storageService.fileExists(decodedKey)) {
       throw new NotFoundException('File not found');

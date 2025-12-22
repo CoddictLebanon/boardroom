@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Building2, Globe, Calendar, Bell, Link2, CreditCard, Shield, ChevronRight } from "lucide-react";
+import { Building2, Globe, Calendar, Bell, Link2, CreditCard, Shield, ChevronRight, Users } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { useState, useEffect } from "react";
@@ -58,6 +58,27 @@ export default function SettingsPage() {
           Manage your company and account settings
         </p>
       </div>
+
+      {/* Members */}
+      <Card
+        className="cursor-pointer transition-colors hover:bg-muted/50"
+        onClick={() => router.push(`/companies/${companyId}/settings/members`)}
+      >
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="rounded-lg bg-emerald-100 p-2">
+                <Users className="h-5 w-5 text-emerald-600" />
+              </div>
+              <div>
+                <CardTitle>Members</CardTitle>
+                <CardDescription>Manage company members and invitations</CardDescription>
+              </div>
+            </div>
+            <ChevronRight className="h-5 w-5 text-muted-foreground" />
+          </div>
+        </CardHeader>
+      </Card>
 
       {/* Role Permissions - Owner Only */}
       {isOwner && (

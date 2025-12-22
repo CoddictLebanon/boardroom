@@ -71,6 +71,10 @@ import {
   Trash2,
   MoreHorizontal,
   GripVertical,
+  Paperclip,
+  Upload,
+  Download,
+  Eye,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -102,6 +106,8 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
+
+import { MeetingDocument } from "@/lib/types";
 
 type VoteType = "FOR" | "AGAINST" | "ABSTAIN";
 
@@ -730,6 +736,13 @@ export default function LiveMeetingPage({
   const [decisions, setDecisions] = useState<any[]>([]);
   const [actionItems, setActionItems] = useState<any[]>([]);
 
+  // Documents state
+  const [meetingDocuments, setMeetingDocuments] = useState<MeetingDocument[]>([]);
+  const [documentDialogOpen, setDocumentDialogOpen] = useState(false);
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [documentName, setDocumentName] = useState("");
+  const [isUploadingDocument, setIsUploadingDocument] = useState(false);
+
   // Load company members for action item assignment
   useEffect(() => {
     const loadMembers = async () => {
@@ -764,7 +777,10 @@ export default function LiveMeetingPage({
     if (meeting?.actionItems) {
       setActionItems(meeting.actionItems);
     }
-  }, [meeting?.meetingNotes, meeting?.agendaItems, meeting?.decisions, meeting?.actionItems]);
+    if (meeting?.documents) {
+      setMeetingDocuments(meeting.documents);
+    }
+  }, [meeting?.meetingNotes, meeting?.agendaItems, meeting?.decisions, meeting?.actionItems, meeting?.documents]);
 
   // Set up socket event handlers for real-time note updates
   useEffect(() => {
@@ -1480,6 +1496,94 @@ export default function LiveMeetingPage({
     setEditingNoteContent("");
   };
 
+  const resetDocumentForm = () => {
+    setDocumentFile(null);
+    setDocumentName("");
+  };
+
+  const handleUploadDocument = async () => {
+    if (!documentFile || !companyId) return;
+    try {
+      setIsUploadingDocument(true);
+      const token = await getToken();
+
+      const formData = new FormData();
+      formData.append("file", documentFile);
+      formData.append("name", documentName.trim() || documentFile.name);
+      formData.append("type", "MEETING_MATERIAL");
+      formData.append("meetingId", id);
+
+      const response = await fetch(`${API_URL}/companies/${companyId}/documents`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error("Failed to upload document");
+
+      const newDoc = await response.json();
+      // Add to meeting documents list
+      if (newDoc.meetings && newDoc.meetings.length > 0) {
+        setMeetingDocuments((prev) => [
+          ...prev,
+          {
+            id: newDoc.meetings[0].id,
+            documentId: newDoc.id,
+            meetingId: id,
+            isPreRead: false,
+            document: {
+              id: newDoc.id,
+              companyId: newDoc.companyId,
+              folderId: newDoc.folderId,
+              uploaderId: newDoc.uploaderId,
+              name: newDoc.name,
+              description: newDoc.description,
+              type: newDoc.type,
+              mimeType: newDoc.mimeType,
+              size: newDoc.size,
+              storageKey: newDoc.storageKey,
+              version: newDoc.version,
+              uploader: newDoc.uploader,
+            },
+          },
+        ]);
+      }
+
+      setDocumentDialogOpen(false);
+      resetDocumentForm();
+    } catch (error) {
+      console.error("Error uploading document:", error);
+      alert("Failed to upload document. Please try again.");
+    } finally {
+      setIsUploadingDocument(false);
+    }
+  };
+
+  const handleViewDocument = async (documentId: string) => {
+    try {
+      const token = await getToken();
+      const response = await fetch(`${API_URL}/companies/${companyId}/documents/${documentId}/download`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error("Failed to get download URL");
+      const { url } = await response.json();
+      window.open(url, "_blank");
+    } catch (error) {
+      console.error("Error viewing document:", error);
+      alert("Failed to open document. Please try again.");
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return "0 Bytes";
+    const k = 1024;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -1671,273 +1775,343 @@ export default function LiveMeetingPage({
         </CardContent>
       </Card>
 
-      {/* Main Content - Full Width Stacked */}
+      {/* Main Content - 2 Column Grid Layout */}
       <div className="space-y-6">
-        {/* Agenda Section */}
+        {/* Row 1: Agenda | Decisions */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Agenda Section */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="rounded-lg bg-blue-100 p-2">
+                    <FileText className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <CardTitle>Agenda</CardTitle>
+                    <CardDescription>{agendaItems.length} items</CardDescription>
+                  </div>
+                </div>
+                {isActive && (
+                  <Button size="sm" onClick={() => setAgendaDialogOpen(true)}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {agendaItems.length > 0 ? (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleAgendaDragEnd}
+                >
+                  <SortableContext
+                    items={agendaItems.map((a) => a.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-3">
+                      {agendaItems.map((item, index) => (
+                        <SortableAgendaItem
+                          key={item.id}
+                          item={item}
+                          index={index}
+                          isActive={isActive}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              ) : (
+                <div className="py-8 text-center">
+                  <FileText className="mx-auto h-8 w-8 text-muted-foreground/50" />
+                  <p className="mt-2 text-sm text-muted-foreground">No agenda items</p>
+                  {isActive && (
+                    <Button size="sm" variant="outline" className="mt-4" onClick={() => setAgendaDialogOpen(true)}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Agenda Item
+                    </Button>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Decisions Section */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="rounded-lg bg-purple-100 p-2">
+                    <Vote className="h-5 w-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <CardTitle>Decisions</CardTitle>
+                    <CardDescription>Record decisions with voting</CardDescription>
+                  </div>
+                </div>
+                {isActive && !activeVote && (
+                  <Button size="sm" onClick={() => setVoteDialogOpen(true)}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {decisions.length > 0 ? (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDecisionsDragEnd}
+                >
+                  <SortableContext
+                    items={decisions.map((d) => d.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-4">
+                      {decisions.map((decision) => (
+                        <SortableDecision
+                          key={decision.id}
+                          decision={decision}
+                          isActive={isActive}
+                          currentUser={currentUser}
+                          attendees={attendees}
+                          isCastingVote={isCastingVote}
+                          onCastVote={handleCastVote}
+                          onFinalizeVote={handleFinalizeVote}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              ) : (
+                <div className="py-8 text-center">
+                  <Vote className="mx-auto h-8 w-8 text-muted-foreground/50" />
+                  <p className="mt-2 text-sm text-muted-foreground">No decisions yet</p>
+                  {isActive && (
+                    <Button size="sm" variant="outline" className="mt-4" onClick={() => setVoteDialogOpen(true)}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Decision
+                    </Button>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Row 2: Action Items | Notes */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Action Items Section */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="rounded-lg bg-amber-100 p-2">
+                    <CheckSquare className="h-5 w-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <CardTitle>Action Items</CardTitle>
+                    <CardDescription>Tasks from this meeting</CardDescription>
+                  </div>
+                </div>
+                {isActive && (
+                  <Button size="sm" onClick={() => setActionDialogOpen(true)}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {actionItems.length > 0 ? (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleActionItemsDragEnd}
+                >
+                  <SortableContext
+                    items={actionItems.map((a) => a.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-3">
+                      {actionItems.map((item: any) => (
+                        <SortableActionItem
+                          key={item.id}
+                          item={item}
+                          isActive={isActive}
+                          onEdit={handleOpenEditAction}
+                          onDelete={(id) => {
+                            setDeletingActionId(id);
+                            setShowDeleteActionConfirm(true);
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              ) : (
+                <div className="py-8 text-center">
+                  <CheckSquare className="mx-auto h-8 w-8 text-muted-foreground/50" />
+                  <p className="mt-2 text-sm text-muted-foreground">No action items yet</p>
+                  {isActive && (
+                    <Button size="sm" variant="outline" className="mt-4" onClick={() => setActionDialogOpen(true)}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Action Item
+                    </Button>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Notes Section */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <div className="rounded-lg bg-slate-100 p-2">
+                  <StickyNote className="h-5 w-5 text-slate-600" />
+                </div>
+                <div>
+                  <CardTitle>Meeting Notes</CardTitle>
+                  <CardDescription>{notes.length} note{notes.length !== 1 ? "s" : ""}</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {/* Add Note Input */}
+              {isActive && (
+                <div className="mb-4 flex gap-2">
+                  <Input
+                    placeholder="Add a note..."
+                    value={newNoteContent}
+                    onChange={(e) => setNewNoteContent(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleCreateNote();
+                      }
+                    }}
+                    disabled={isSubmittingNote}
+                  />
+                  <Button onClick={handleCreateNote} disabled={isSubmittingNote || !newNoteContent.trim()}>
+                    {isSubmittingNote ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  </Button>
+                </div>
+              )}
+
+              {/* Notes List with Drag-and-Drop */}
+              {notes.length > 0 ? (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleNotesDragEnd}
+                >
+                  <SortableContext
+                    items={notes.map((n) => n.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-3">
+                      {notes.map((note) => (
+                        <SortableNote
+                          key={note.id}
+                          note={note}
+                          isActive={isActive}
+                          isOwner={note.createdById === currentUser?.id}
+                          editingNoteId={editingNoteId}
+                          editingNoteContent={editingNoteContent}
+                          setEditingNoteContent={setEditingNoteContent}
+                          onEdit={handleOpenEditNote}
+                          onCancelEdit={handleCancelEditNote}
+                          onSave={handleUpdateNote}
+                          onDelete={(noteId) => {
+                            setDeletingNoteId(noteId);
+                            setShowDeleteNoteConfirm(true);
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              ) : (
+                <div className="py-8 text-center">
+                  <StickyNote className="mx-auto h-8 w-8 text-muted-foreground/50" />
+                  <p className="mt-2 text-sm text-muted-foreground">No notes yet</p>
+                  {!isActive && (
+                    <p className="mt-1 text-xs text-muted-foreground">Start the meeting to add notes</p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Row 3: Documents (full width) */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="rounded-lg bg-blue-100 p-2">
-                  <FileText className="h-5 w-5 text-blue-600" />
+                <div className="rounded-lg bg-cyan-100 p-2">
+                  <Paperclip className="h-5 w-5 text-cyan-600" />
                 </div>
                 <div>
-                  <CardTitle>Agenda</CardTitle>
-                  <CardDescription>{agendaItems.length} items</CardDescription>
+                  <CardTitle>Documents</CardTitle>
+                  <CardDescription>{meetingDocuments.length} document{meetingDocuments.length !== 1 ? "s" : ""}</CardDescription>
                 </div>
               </div>
               {isActive && (
-                <Button size="sm" onClick={() => setAgendaDialogOpen(true)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Agenda Item
+                <Button size="sm" onClick={() => setDocumentDialogOpen(true)}>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload
                 </Button>
               )}
             </div>
           </CardHeader>
           <CardContent>
-            {agendaItems.length > 0 ? (
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleAgendaDragEnd}
-              >
-                <SortableContext
-                  items={agendaItems.map((a) => a.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <div className="space-y-3">
-                    {agendaItems.map((item, index) => (
-                      <SortableAgendaItem
-                        key={item.id}
-                        item={item}
-                        index={index}
-                        isActive={isActive}
-                      />
-                    ))}
+            {meetingDocuments.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {meetingDocuments.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="flex items-center gap-3 rounded-lg border p-3 hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="rounded-lg bg-muted p-2">
+                      <FileText className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{doc.document.name}</p>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>{formatFileSize(doc.document.size || 0)}</span>
+                        {doc.document.uploader && (
+                          <>
+                            <span>•</span>
+                            <span>{doc.document.uploader.firstName}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8"
+                      onClick={() => handleViewDocument(doc.document.id)}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
                   </div>
-                </SortableContext>
-              </DndContext>
+                ))}
+              </div>
             ) : (
               <div className="py-8 text-center">
-                <FileText className="mx-auto h-8 w-8 text-muted-foreground/50" />
-                <p className="mt-2 text-sm text-muted-foreground">No agenda items</p>
+                <Paperclip className="mx-auto h-8 w-8 text-muted-foreground/50" />
+                <p className="mt-2 text-sm text-muted-foreground">No documents attached</p>
                 {isActive && (
-                  <Button size="sm" variant="outline" className="mt-4" onClick={() => setAgendaDialogOpen(true)}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Agenda Item
+                  <Button size="sm" variant="outline" className="mt-4" onClick={() => setDocumentDialogOpen(true)}>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload Document
                   </Button>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Decisions Section */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="rounded-lg bg-purple-100 p-2">
-                  <Vote className="h-5 w-5 text-purple-600" />
-                </div>
-                <div>
-                  <CardTitle>Decisions</CardTitle>
-                  <CardDescription>Record decisions with optional voting</CardDescription>
-                </div>
-              </div>
-              {isActive && !activeVote && (
-                <Button size="sm" onClick={() => setVoteDialogOpen(true)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Decision
-                </Button>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {decisions.length > 0 ? (
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDecisionsDragEnd}
-              >
-                <SortableContext
-                  items={decisions.map((d) => d.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <div className="space-y-4">
-                    {decisions.map((decision) => (
-                      <SortableDecision
-                        key={decision.id}
-                        decision={decision}
-                        isActive={isActive}
-                        currentUser={currentUser}
-                        attendees={attendees}
-                        isCastingVote={isCastingVote}
-                        onCastVote={handleCastVote}
-                        onFinalizeVote={handleFinalizeVote}
-                      />
-                    ))}
-                  </div>
-                </SortableContext>
-              </DndContext>
-            ) : (
-              <div className="py-8 text-center">
-                <Vote className="mx-auto h-8 w-8 text-muted-foreground/50" />
-                <p className="mt-2 text-sm text-muted-foreground">No decisions recorded yet</p>
-                {isActive && (
-                  <Button size="sm" variant="outline" className="mt-4" onClick={() => setVoteDialogOpen(true)}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Decision
-                  </Button>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Action Items Section */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="rounded-lg bg-amber-100 p-2">
-                  <CheckSquare className="h-5 w-5 text-amber-600" />
-                </div>
-                <div>
-                  <CardTitle>Action Items</CardTitle>
-                  <CardDescription>Tasks from this meeting</CardDescription>
-                </div>
-              </div>
-              {isActive && (
-                <Button size="sm" onClick={() => setActionDialogOpen(true)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Action
-                </Button>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {actionItems.length > 0 ? (
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleActionItemsDragEnd}
-              >
-                <SortableContext
-                  items={actionItems.map((a) => a.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <div className="space-y-3">
-                    {actionItems.map((item: any) => (
-                      <SortableActionItem
-                        key={item.id}
-                        item={item}
-                        isActive={isActive}
-                        onEdit={handleOpenEditAction}
-                        onDelete={(id) => {
-                          setDeletingActionId(id);
-                          setShowDeleteActionConfirm(true);
-                        }}
-                      />
-                    ))}
-                    {isActive && (
-                      <Button size="sm" variant="outline" className="w-full" onClick={() => setActionDialogOpen(true)}>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Add Action Item
-                      </Button>
-                    )}
-                  </div>
-                </SortableContext>
-              </DndContext>
-            ) : (
-              <div className="py-8 text-center">
-                <CheckSquare className="mx-auto h-8 w-8 text-muted-foreground/50" />
-                <p className="mt-2 text-sm text-muted-foreground">No action items yet</p>
-                {isActive && (
-                  <Button size="sm" variant="outline" className="mt-4" onClick={() => setActionDialogOpen(true)}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Action Item
-                  </Button>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Notes Section */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <div className="rounded-lg bg-slate-100 p-2">
-                <StickyNote className="h-5 w-5 text-slate-600" />
-              </div>
-              <div>
-                <CardTitle>Meeting Notes</CardTitle>
-                <CardDescription>{notes.length} note{notes.length !== 1 ? "s" : ""}</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {/* Add Note Input */}
-            {isActive && (
-              <div className="mb-4 flex gap-2">
-                <Input
-                  placeholder="Add a note..."
-                  value={newNoteContent}
-                  onChange={(e) => setNewNoteContent(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleCreateNote();
-                    }
-                  }}
-                  disabled={isSubmittingNote}
-                />
-                <Button onClick={handleCreateNote} disabled={isSubmittingNote || !newNoteContent.trim()}>
-                  {isSubmittingNote ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                </Button>
-              </div>
-            )}
-
-            {/* Notes List with Drag-and-Drop */}
-            {notes.length > 0 ? (
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleNotesDragEnd}
-              >
-                <SortableContext
-                  items={notes.map((n) => n.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <div className="space-y-3">
-                    {notes.map((note) => (
-                      <SortableNote
-                        key={note.id}
-                        note={note}
-                        isActive={isActive}
-                        isOwner={note.createdById === currentUser?.id}
-                        editingNoteId={editingNoteId}
-                        editingNoteContent={editingNoteContent}
-                        setEditingNoteContent={setEditingNoteContent}
-                        onEdit={handleOpenEditNote}
-                        onCancelEdit={handleCancelEditNote}
-                        onSave={handleUpdateNote}
-                        onDelete={(noteId) => {
-                          setDeletingNoteId(noteId);
-                          setShowDeleteNoteConfirm(true);
-                        }}
-                      />
-                    ))}
-                  </div>
-                </SortableContext>
-              </DndContext>
-            ) : (
-              <div className="py-8 text-center">
-                <StickyNote className="mx-auto h-8 w-8 text-muted-foreground/50" />
-                <p className="mt-2 text-sm text-muted-foreground">No notes yet</p>
-                {!isActive && (
-                  <p className="mt-1 text-xs text-muted-foreground">Start the meeting to add notes</p>
                 )}
               </div>
             )}
@@ -2275,6 +2449,66 @@ export default function LiveMeetingPage({
             <Button onClick={handleAddAttendees} disabled={isAddingAttendees || selectedMemberIds.length === 0}>
               {isAddingAttendees && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Add {selectedMemberIds.length > 0 ? `(${selectedMemberIds.length})` : ""}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Upload Document Dialog */}
+      <Dialog open={documentDialogOpen} onOpenChange={(open) => {
+        setDocumentDialogOpen(open);
+        if (!open) resetDocumentForm();
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Upload Document</DialogTitle>
+            <DialogDescription>Add a document to this meeting.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="document-file">File</Label>
+              <Input
+                id="document-file"
+                type="file"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    setDocumentFile(file);
+                    if (!documentName) {
+                      setDocumentName(file.name);
+                    }
+                  }
+                }}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="document-name">Name</Label>
+              <Input
+                id="document-name"
+                placeholder="Document name"
+                value={documentName}
+                onChange={(e) => setDocumentName(e.target.value)}
+              />
+            </div>
+            {documentFile && (
+              <div className="rounded-lg border p-3 bg-muted/50">
+                <div className="flex items-center gap-3">
+                  <FileText className="h-5 w-5 text-muted-foreground" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{documentFile.name}</p>
+                    <p className="text-xs text-muted-foreground">{formatFileSize(documentFile.size)}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDocumentDialogOpen(false)} disabled={isUploadingDocument}>
+              Cancel
+            </Button>
+            <Button onClick={handleUploadDocument} disabled={isUploadingDocument || !documentFile}>
+              {isUploadingDocument && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Upload
             </Button>
           </DialogFooter>
         </DialogContent>

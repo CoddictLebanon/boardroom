@@ -59,7 +59,7 @@ export class OkrsController {
     @Param('companyId') companyId: string,
     @Param('id') id: string,
   ) {
-    return this.okrsService.findOnePeriod(id);
+    return this.okrsService.findOnePeriod(id, companyId);
   }
 
   @Patch('companies/:companyId/okr-periods/:id')
@@ -70,7 +70,7 @@ export class OkrsController {
     @Param('id') id: string,
     @Body() dto: UpdateOkrPeriodDto,
   ) {
-    return this.okrsService.updatePeriod(id, dto);
+    return this.okrsService.updatePeriod(id, companyId, dto);
   }
 
   @Post('companies/:companyId/okr-periods/:id/close')
@@ -80,7 +80,7 @@ export class OkrsController {
     @Param('companyId') companyId: string,
     @Param('id') id: string,
   ) {
-    return this.okrsService.closePeriod(id);
+    return this.okrsService.closePeriod(id, companyId);
   }
 
   @Post('companies/:companyId/okr-periods/:id/reopen')
@@ -90,7 +90,7 @@ export class OkrsController {
     @Param('companyId') companyId: string,
     @Param('id') id: string,
   ) {
-    return this.okrsService.reopenPeriod(id);
+    return this.okrsService.reopenPeriod(id, companyId);
   }
 
   @Delete('companies/:companyId/okr-periods/:id')
@@ -100,7 +100,7 @@ export class OkrsController {
     @Param('companyId') companyId: string,
     @Param('id') id: string,
   ) {
-    return this.okrsService.deletePeriod(id);
+    return this.okrsService.deletePeriod(id, companyId);
   }
 
   // ==========================================
@@ -115,7 +115,7 @@ export class OkrsController {
     @Param('periodId') periodId: string,
     @Body() dto: CreateObjectiveDto,
   ) {
-    return this.okrsService.createObjective(periodId, dto);
+    return this.okrsService.createObjective(periodId, companyId, dto);
   }
 
   @Patch('companies/:companyId/okr-periods/:periodId/objectives/:id')
@@ -127,7 +127,7 @@ export class OkrsController {
     @Param('id') id: string,
     @Body() dto: UpdateObjectiveDto,
   ) {
-    return this.okrsService.updateObjective(id, dto);
+    return this.okrsService.updateObjective(id, companyId, dto);
   }
 
   @Delete('companies/:companyId/okr-periods/:periodId/objectives/:id')
@@ -138,7 +138,7 @@ export class OkrsController {
     @Param('periodId') periodId: string,
     @Param('id') id: string,
   ) {
-    return this.okrsService.deleteObjective(id);
+    return this.okrsService.deleteObjective(id, companyId);
   }
 
   // ==========================================
@@ -154,7 +154,7 @@ export class OkrsController {
     @Param('objectiveId') objectiveId: string,
     @Body() dto: CreateKeyResultDto,
   ) {
-    return this.okrsService.createKeyResult(objectiveId, dto);
+    return this.okrsService.createKeyResult(objectiveId, companyId, dto);
   }
 
   @Patch('companies/:companyId/okr-periods/:periodId/objectives/:objectiveId/key-results/:id')
@@ -167,7 +167,7 @@ export class OkrsController {
     @Param('id') id: string,
     @Body() dto: UpdateKeyResultDto,
   ) {
-    return this.okrsService.updateKeyResult(id, dto);
+    return this.okrsService.updateKeyResult(id, companyId, dto);
   }
 
   @Delete('companies/:companyId/okr-periods/:periodId/objectives/:objectiveId/key-results/:id')
@@ -179,6 +179,6 @@ export class OkrsController {
     @Param('objectiveId') objectiveId: string,
     @Param('id') id: string,
   ) {
-    return this.okrsService.deleteKeyResult(id);
+    return this.okrsService.deleteKeyResult(id, companyId);
   }
 }

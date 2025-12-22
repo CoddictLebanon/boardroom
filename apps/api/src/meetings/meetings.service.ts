@@ -1033,7 +1033,7 @@ export class MeetingsService {
           notes: meeting.notes,
         });
       } catch (error) {
-        console.error(`Failed to send summary email to ${email}:`, error);
+        this.logger.error(`Failed to send summary email to ${email}:`, error);
       }
     }
   }

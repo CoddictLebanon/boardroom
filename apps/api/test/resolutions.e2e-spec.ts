@@ -153,7 +153,7 @@ describe('Resolutions API (e2e)', () => {
     });
   });
 
-  describe('GET /api/v1/resolutions/:id', () => {
+  describe('GET /api/v1/companies/:companyId/resolutions/:id', () => {
     it('should return resolution details', async () => {
       const resolution = await prisma.resolution.create({
         data: {
@@ -167,7 +167,7 @@ describe('Resolutions API (e2e)', () => {
       });
 
       const response = await request(app.getHttpServer())
-        .get(`/api/v1/resolutions/${resolution.id}`)
+        .get(`/api/v1/companies/${companyId}/resolutions/${resolution.id}`)
         .expect(200);
 
       expect(response.body.number).toBe('RES-2025-001');
@@ -177,12 +177,12 @@ describe('Resolutions API (e2e)', () => {
 
     it('should return 404 for non-existent resolution', async () => {
       await request(app.getHttpServer())
-        .get('/api/v1/resolutions/non-existent-id')
+        .get(`/api/v1/companies/${companyId}/resolutions/non-existent-id`)
         .expect(404);
     });
   });
 
-  describe('PUT /api/v1/resolutions/:id', () => {
+  describe('PUT /api/v1/companies/:companyId/resolutions/:id', () => {
     let resolutionId: string;
 
     beforeEach(async () => {
@@ -201,7 +201,7 @@ describe('Resolutions API (e2e)', () => {
 
     it('should update resolution details', async () => {
       const response = await request(app.getHttpServer())
-        .put(`/api/v1/resolutions/${resolutionId}`)
+        .put(`/api/v1/companies/${companyId}/resolutions/${resolutionId}`)
         .send({
           title: 'Updated Title',
           content: 'Updated content',
@@ -214,7 +214,7 @@ describe('Resolutions API (e2e)', () => {
 
     it('should update resolution status to PROPOSED', async () => {
       const response = await request(app.getHttpServer())
-        .put(`/api/v1/resolutions/${resolutionId}`)
+        .put(`/api/v1/companies/${companyId}/resolutions/${resolutionId}`)
         .send({ status: 'PROPOSED' })
         .expect(200);
 
@@ -229,13 +229,13 @@ describe('Resolutions API (e2e)', () => {
       });
 
       await request(app.getHttpServer())
-        .put(`/api/v1/resolutions/${resolutionId}`)
+        .put(`/api/v1/companies/${companyId}/resolutions/${resolutionId}`)
         .send({ title: 'Trying to change' })
         .expect(403); // ForbiddenException for passed resolutions
     });
   });
 
-  describe('DELETE /api/v1/resolutions/:id', () => {
+  describe('DELETE /api/v1/companies/:companyId/resolutions/:id', () => {
     it('should delete a draft resolution', async () => {
       const resolution = await prisma.resolution.create({
         data: {
@@ -249,7 +249,7 @@ describe('Resolutions API (e2e)', () => {
       });
 
       await request(app.getHttpServer())
-        .delete(`/api/v1/resolutions/${resolution.id}`)
+        .delete(`/api/v1/companies/${companyId}/resolutions/${resolution.id}`)
         .expect(200);
 
       // Verify deletion
@@ -272,7 +272,7 @@ describe('Resolutions API (e2e)', () => {
       });
 
       await request(app.getHttpServer())
-        .delete(`/api/v1/resolutions/${resolution.id}`)
+        .delete(`/api/v1/companies/${companyId}/resolutions/${resolution.id}`)
         .expect(403); // ForbiddenException for passed resolutions
     });
   });
@@ -293,7 +293,7 @@ describe('Resolutions API (e2e)', () => {
 
       // Move to PROPOSED
       const proposedResponse = await request(app.getHttpServer())
-        .put(`/api/v1/resolutions/${resolutionId}`)
+        .put(`/api/v1/companies/${companyId}/resolutions/${resolutionId}`)
         .send({ status: 'PROPOSED' })
         .expect(200);
 
@@ -301,7 +301,7 @@ describe('Resolutions API (e2e)', () => {
 
       // Move to PASSED
       const passedResponse = await request(app.getHttpServer())
-        .put(`/api/v1/resolutions/${resolutionId}`)
+        .put(`/api/v1/companies/${companyId}/resolutions/${resolutionId}`)
         .send({ status: 'PASSED' })
         .expect(200);
 

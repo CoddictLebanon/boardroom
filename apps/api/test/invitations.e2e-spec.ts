@@ -123,7 +123,7 @@ describe('Invitations API (e2e)', () => {
     });
   });
 
-  describe('DELETE /api/v1/invitations/:id', () => {
+  describe('DELETE /api/v1/companies/:companyId/invitations/:id', () => {
     it('should revoke an invitation', async () => {
       const invitation = await prisma.invitation.create({
         data: {
@@ -137,7 +137,7 @@ describe('Invitations API (e2e)', () => {
       });
 
       const response = await request(app.getHttpServer())
-        .delete(`/api/v1/invitations/${invitation.id}`)
+        .delete(`/api/v1/companies/${companyId}/invitations/${invitation.id}`)
         .expect(200);
 
       expect(response.body.status).toBe('REVOKED');

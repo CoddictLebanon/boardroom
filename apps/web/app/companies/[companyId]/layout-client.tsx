@@ -2,6 +2,7 @@
 
 import { SocketProvider } from "@/lib/socket";
 import { PermissionProvider } from "@/lib/permissions";
+import { SidebarProvider } from "@/lib/sidebar-context";
 
 interface CompanyLayoutClientProps {
   companyId: string;
@@ -12,7 +13,9 @@ export function CompanyLayoutClient({ companyId, children }: CompanyLayoutClient
   return (
     <SocketProvider>
       <PermissionProvider companyId={companyId}>
-        {children}
+        <SidebarProvider>
+          {children}
+        </SidebarProvider>
       </PermissionProvider>
     </SocketProvider>
   );

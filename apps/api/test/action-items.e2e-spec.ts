@@ -191,7 +191,7 @@ describe('Action Items API (e2e)', () => {
     });
   });
 
-  describe('GET /api/v1/action-items/:id', () => {
+  describe('GET /api/v1/companies/:companyId/action-items/:id', () => {
     it('should return action item details', async () => {
       const actionItem = await prisma.actionItem.create({
         data: {
@@ -204,7 +204,7 @@ describe('Action Items API (e2e)', () => {
       });
 
       const response = await request(app.getHttpServer())
-        .get(`/api/v1/action-items/${actionItem.id}`)
+        .get(`/api/v1/companies/${companyId}/action-items/${actionItem.id}`)
         .expect(200);
 
       expect(response.body.title).toBe('Detailed Task');
@@ -213,12 +213,12 @@ describe('Action Items API (e2e)', () => {
 
     it('should return 404 for non-existent action item', async () => {
       await request(app.getHttpServer())
-        .get('/api/v1/action-items/non-existent-id')
+        .get(`/api/v1/companies/${companyId}/action-items/non-existent-id`)
         .expect(404);
     });
   });
 
-  describe('PUT /api/v1/action-items/:id', () => {
+  describe('PUT /api/v1/companies/:companyId/action-items/:id', () => {
     let actionItemId: string;
 
     beforeEach(async () => {
@@ -235,7 +235,7 @@ describe('Action Items API (e2e)', () => {
 
     it('should update action item details', async () => {
       const response = await request(app.getHttpServer())
-        .put(`/api/v1/action-items/${actionItemId}`)
+        .put(`/api/v1/companies/${companyId}/action-items/${actionItemId}`)
         .send({
           title: 'Updated Title',
           priority: 'HIGH',
@@ -248,7 +248,7 @@ describe('Action Items API (e2e)', () => {
 
     it('should assign action item to user', async () => {
       const response = await request(app.getHttpServer())
-        .put(`/api/v1/action-items/${actionItemId}`)
+        .put(`/api/v1/companies/${companyId}/action-items/${actionItemId}`)
         .send({ assigneeId: TEST_USER.id })
         .expect(200);
 
@@ -256,7 +256,7 @@ describe('Action Items API (e2e)', () => {
     });
   });
 
-  describe('PUT /api/v1/action-items/:id/status', () => {
+  describe('PUT /api/v1/companies/:companyId/action-items/:id/status', () => {
     let actionItemId: string;
 
     beforeEach(async () => {
@@ -273,7 +273,7 @@ describe('Action Items API (e2e)', () => {
 
     it('should update status to IN_PROGRESS', async () => {
       const response = await request(app.getHttpServer())
-        .put(`/api/v1/action-items/${actionItemId}/status`)
+        .put(`/api/v1/companies/${companyId}/action-items/${actionItemId}/status`)
         .send({ status: 'IN_PROGRESS' })
         .expect(200);
 
@@ -282,7 +282,7 @@ describe('Action Items API (e2e)', () => {
 
     it('should update status to COMPLETED', async () => {
       const response = await request(app.getHttpServer())
-        .put(`/api/v1/action-items/${actionItemId}/status`)
+        .put(`/api/v1/companies/${companyId}/action-items/${actionItemId}/status`)
         .send({ status: 'COMPLETED' })
         .expect(200);
 
@@ -291,13 +291,13 @@ describe('Action Items API (e2e)', () => {
 
     it('should reject invalid status', async () => {
       await request(app.getHttpServer())
-        .put(`/api/v1/action-items/${actionItemId}/status`)
+        .put(`/api/v1/companies/${companyId}/action-items/${actionItemId}/status`)
         .send({ status: 'INVALID_STATUS' })
         .expect(400);
     });
   });
 
-  describe('DELETE /api/v1/action-items/:id', () => {
+  describe('DELETE /api/v1/companies/:companyId/action-items/:id', () => {
     it('should delete an action item', async () => {
       const actionItem = await prisma.actionItem.create({
         data: {
@@ -309,7 +309,7 @@ describe('Action Items API (e2e)', () => {
       });
 
       await request(app.getHttpServer())
-        .delete(`/api/v1/action-items/${actionItem.id}`)
+        .delete(`/api/v1/companies/${companyId}/action-items/${actionItem.id}`)
         .expect(200);
 
       // Verify deletion

@@ -1,13 +1,15 @@
-import { IsString, IsEnum, IsOptional, IsDateString, IsNotEmpty } from 'class-validator';
+import { IsString, IsEnum, IsOptional, IsDateString, IsNotEmpty, MaxLength, IsUUID } from 'class-validator';
 import { ResolutionCategory, ResolutionStatus } from '@prisma/client';
 
 export class CreateResolutionDto {
   @IsString()
   @IsNotEmpty()
+  @MaxLength(500)
   title: string;
 
   @IsString()
   @IsNotEmpty()
+  @MaxLength(50000)
   content: string;
 
   @IsEnum(ResolutionCategory)
@@ -20,6 +22,7 @@ export class CreateResolutionDto {
 
   @IsString()
   @IsOptional()
+  @IsUUID()
   decisionId?: string;
 
   @IsDateString()

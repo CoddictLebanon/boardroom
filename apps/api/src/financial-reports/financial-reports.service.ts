@@ -59,9 +59,9 @@ export class FinancialReportsService {
     });
   }
 
-  async findOne(id: string) {
-    const report = await this.prisma.financialReport.findUnique({
-      where: { id },
+  async findOne(id: string, companyId: string) {
+    const report = await this.prisma.financialReport.findFirst({
+      where: { id, companyId },
       include: {
         company: {
           select: {
@@ -79,9 +79,9 @@ export class FinancialReportsService {
     return report;
   }
 
-  async update(id: string, dto: UpdateFinancialReportDto) {
-    const report = await this.prisma.financialReport.findUnique({
-      where: { id },
+  async update(id: string, companyId: string, dto: UpdateFinancialReportDto) {
+    const report = await this.prisma.financialReport.findFirst({
+      where: { id, companyId },
     });
 
     if (!report) {
@@ -105,9 +105,9 @@ export class FinancialReportsService {
     });
   }
 
-  async finalize(id: string) {
-    const report = await this.prisma.financialReport.findUnique({
-      where: { id },
+  async finalize(id: string, companyId: string) {
+    const report = await this.prisma.financialReport.findFirst({
+      where: { id, companyId },
     });
 
     if (!report) {
@@ -124,9 +124,9 @@ export class FinancialReportsService {
     });
   }
 
-  async remove(id: string) {
-    const report = await this.prisma.financialReport.findUnique({
-      where: { id },
+  async remove(id: string, companyId: string) {
+    const report = await this.prisma.financialReport.findFirst({
+      where: { id, companyId },
     });
 
     if (!report) {
@@ -143,9 +143,9 @@ export class FinancialReportsService {
     });
   }
 
-  async uploadFile(id: string, storageKey: string) {
-    const report = await this.prisma.financialReport.findUnique({
-      where: { id },
+  async uploadFile(id: string, companyId: string, storageKey: string) {
+    const report = await this.prisma.financialReport.findFirst({
+      where: { id, companyId },
     });
 
     if (!report) {

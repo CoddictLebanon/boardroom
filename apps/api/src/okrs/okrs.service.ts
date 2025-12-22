@@ -181,9 +181,9 @@ export class OkrsService {
     return periods.map((period) => this.addProgressToPeriod(period));
   }
 
-  async findOnePeriod(id: string): Promise<OkrPeriodWithProgress> {
-    const period = await this.prisma.okrPeriod.findUnique({
-      where: { id },
+  async findOnePeriod(id: string, companyId: string): Promise<OkrPeriodWithProgress> {
+    const period = await this.prisma.okrPeriod.findFirst({
+      where: { id, companyId },
       include: {
         objectives: {
           include: {
@@ -203,8 +203,8 @@ export class OkrsService {
     return this.addProgressToPeriod(period);
   }
 
-  async updatePeriod(id: string, dto: UpdateOkrPeriodDto): Promise<OkrPeriodWithProgress> {
-    const period = await this.findOnePeriod(id);
+  async updatePeriod(id: string, companyId: string, dto: UpdateOkrPeriodDto): Promise<OkrPeriodWithProgress> {
+    const period = await this.findOnePeriod(id, companyId);
 
     if (period.status === OkrPeriodStatus.CLOSED) {
       throw new ForbiddenException('Cannot update a closed OKR period');
@@ -232,8 +232,8 @@ export class OkrsService {
     return this.addProgressToPeriod(updated);
   }
 
-  async closePeriod(id: string): Promise<OkrPeriodWithProgress> {
-    await this.findOnePeriod(id);
+  async closePeriod(id: string, companyId: string): Promise<OkrPeriodWithProgress> {
+    await this.findOnePeriod(id, companyId);
 
     const updated = await this.prisma.okrPeriod.update({
       where: { id },
@@ -253,8 +253,8 @@ export class OkrsService {
     return this.addProgressToPeriod(updated);
   }
 
-  async reopenPeriod(id: string): Promise<OkrPeriodWithProgress> {
-    await this.findOnePeriod(id);
+  async reopenPeriod(id: string, companyId: string): Promise<OkrPeriodWithProgress> {
+    await this.findOnePeriod(id, companyId);
 
     const updated = await this.prisma.okrPeriod.update({
       where: { id },
@@ -274,8 +274,8 @@ export class OkrsService {
     return this.addProgressToPeriod(updated);
   }
 
-  async deletePeriod(id: string): Promise<{ message: string }> {
-    await this.findOnePeriod(id);
+  async deletePeriod(id: string, companyId: string): Promise<{ message: string }> {
+    await this.findOnePeriod(id, companyId);
 
     await this.prisma.okrPeriod.delete({
       where: { id },
@@ -288,8 +288,8 @@ export class OkrsService {
   // Objectives
   // ==========================================
 
-  async createObjective(periodId: string, dto: CreateObjectiveDto): Promise<ObjectiveWithProgress> {
-    const period = await this.findOnePeriod(periodId);
+  async createObjective(periodId: string, companyId: string, dto: CreateObjectiveDto): Promise<ObjectiveWithProgress> {
+    const period = await this.findOnePeriod(periodId, companyId);
 
     if (period.status === OkrPeriodStatus.CLOSED) {
       throw new ForbiddenException('Cannot add objectives to a closed OKR period');
@@ -311,9 +311,12 @@ export class OkrsService {
     return this.addProgressToObjective(objective);
   }
 
-  async updateObjective(id: string, dto: UpdateObjectiveDto): Promise<ObjectiveWithProgress> {
-    const objective = await this.prisma.objective.findUnique({
-      where: { id },
+  async updateObjective(id: string, companyId: string, dto: UpdateObjectiveDto): Promise<ObjectiveWithProgress> {
+    const objective = await this.prisma.objective.findFirst({
+      where: {
+        id,
+        period: { companyId },
+      },
       include: {
         period: true,
         keyResults: {
@@ -346,9 +349,12 @@ export class OkrsService {
     return this.addProgressToObjective(updated);
   }
 
-  async deleteObjective(id: string): Promise<{ message: string }> {
-    const objective = await this.prisma.objective.findUnique({
-      where: { id },
+  async deleteObjective(id: string, companyId: string): Promise<{ message: string }> {
+    const objective = await this.prisma.objective.findFirst({
+      where: {
+        id,
+        period: { companyId },
+      },
       include: { period: true },
     });
 
@@ -371,9 +377,12 @@ export class OkrsService {
   // Key Results
   // ==========================================
 
-  async createKeyResult(objectiveId: string, dto: CreateKeyResultDto): Promise<KeyResultWithProgress> {
-    const objective = await this.prisma.objective.findUnique({
-      where: { id: objectiveId },
+  async createKeyResult(objectiveId: string, companyId: string, dto: CreateKeyResultDto): Promise<KeyResultWithProgress> {
+    const objective = await this.prisma.objective.findFirst({
+      where: {
+        id: objectiveId,
+        period: { companyId },
+      },
       include: { period: true },
     });
 
@@ -402,9 +411,14 @@ export class OkrsService {
     return this.addProgressToKeyResult(keyResult);
   }
 
-  async updateKeyResult(id: string, dto: UpdateKeyResultDto): Promise<KeyResultWithProgress> {
-    const keyResult = await this.prisma.keyResult.findUnique({
-      where: { id },
+  async updateKeyResult(id: string, companyId: string, dto: UpdateKeyResultDto): Promise<KeyResultWithProgress> {
+    const keyResult = await this.prisma.keyResult.findFirst({
+      where: {
+        id,
+        objective: {
+          period: { companyId },
+        },
+      },
       include: {
         objective: {
           include: { period: true },
@@ -437,9 +451,14 @@ export class OkrsService {
     return this.addProgressToKeyResult(updated);
   }
 
-  async deleteKeyResult(id: string): Promise<{ message: string }> {
-    const keyResult = await this.prisma.keyResult.findUnique({
-      where: { id },
+  async deleteKeyResult(id: string, companyId: string): Promise<{ message: string }> {
+    const keyResult = await this.prisma.keyResult.findFirst({
+      where: {
+        id,
+        objective: {
+          period: { companyId },
+        },
+      },
       include: {
         objective: {
           include: { period: true },

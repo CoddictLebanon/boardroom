@@ -149,7 +149,7 @@ describe('Meetings API (e2e)', () => {
     });
   });
 
-  describe('GET /api/v1/meetings/:id', () => {
+  describe('GET /api/v1/companies/:companyId/meetings/:id', () => {
     let meetingId: string;
 
     beforeEach(async () => {
@@ -183,7 +183,7 @@ describe('Meetings API (e2e)', () => {
       });
 
       const response = await request(app.getHttpServer())
-        .get(`/api/v1/meetings/${meetingId}`)
+        .get(`/api/v1/companies/${companyId}/meetings/${meetingId}`)
         .expect(200);
 
       expect(response.body.title).toBe('Test Meeting');
@@ -192,12 +192,12 @@ describe('Meetings API (e2e)', () => {
 
     it('should return 404 for non-existent meeting', async () => {
       await request(app.getHttpServer())
-        .get('/api/v1/meetings/non-existent-id')
+        .get(`/api/v1/companies/${companyId}/meetings/non-existent-id`)
         .expect(404);
     });
   });
 
-  describe('PUT /api/v1/meetings/:id', () => {
+  describe('PUT /api/v1/companies/:companyId/meetings/:id', () => {
     let meetingId: string;
 
     beforeEach(async () => {
@@ -215,7 +215,7 @@ describe('Meetings API (e2e)', () => {
 
     it('should update meeting details', async () => {
       const response = await request(app.getHttpServer())
-        .put(`/api/v1/meetings/${meetingId}`)
+        .put(`/api/v1/companies/${companyId}/meetings/${meetingId}`)
         .send({
           title: 'Updated Title',
           duration: 90,
@@ -228,7 +228,7 @@ describe('Meetings API (e2e)', () => {
 
     it('should update meeting status', async () => {
       const response = await request(app.getHttpServer())
-        .put(`/api/v1/meetings/${meetingId}`)
+        .put(`/api/v1/companies/${companyId}/meetings/${meetingId}`)
         .send({ status: 'IN_PROGRESS' })
         .expect(200);
 
@@ -236,7 +236,7 @@ describe('Meetings API (e2e)', () => {
     });
   });
 
-  describe('DELETE /api/v1/meetings/:id', () => {
+  describe('DELETE /api/v1/companies/:companyId/meetings/:id', () => {
     it('should soft-delete a meeting (set status to CANCELLED)', async () => {
       const meeting = await prisma.meeting.create({
         data: {
@@ -249,7 +249,7 @@ describe('Meetings API (e2e)', () => {
       });
 
       await request(app.getHttpServer())
-        .delete(`/api/v1/meetings/${meeting.id}`)
+        .delete(`/api/v1/companies/${companyId}/meetings/${meeting.id}`)
         .expect(200);
 
       // Verify soft deletion - status should be CANCELLED
@@ -277,9 +277,9 @@ describe('Meetings API (e2e)', () => {
       meetingId = meeting.id;
     });
 
-    it('POST /meetings/:id/agenda - should add agenda item', async () => {
+    it('POST /companies/:companyId/meetings/:id/agenda - should add agenda item', async () => {
       const response = await request(app.getHttpServer())
-        .post(`/api/v1/meetings/${meetingId}/agenda`)
+        .post(`/api/v1/companies/${companyId}/meetings/${meetingId}/agenda`)
         .send({
           title: 'New Agenda Item',
           description: 'Discussion topic',
@@ -291,7 +291,7 @@ describe('Meetings API (e2e)', () => {
       expect(response.body.order).toBe(1); // Auto-assigned
     });
 
-    it('PUT /meetings/:id/agenda/:itemId - should update agenda item', async () => {
+    it('PUT /companies/:companyId/meetings/:id/agenda/:itemId - should update agenda item', async () => {
       const agendaItem = await prisma.agendaItem.create({
         data: {
           meeting: { connect: { id: meetingId } },
@@ -301,7 +301,7 @@ describe('Meetings API (e2e)', () => {
       });
 
       const response = await request(app.getHttpServer())
-        .put(`/api/v1/meetings/${meetingId}/agenda/${agendaItem.id}`)
+        .put(`/api/v1/companies/${companyId}/meetings/${meetingId}/agenda/${agendaItem.id}`)
         .send({ title: 'Updated', duration: 20 })
         .expect(200);
 
@@ -339,9 +339,9 @@ describe('Meetings API (e2e)', () => {
       meetingId = meeting.id;
     });
 
-    it('POST /meetings/:id/decisions - should create a decision', async () => {
+    it('POST /companies/:companyId/meetings/:id/decisions - should create a decision', async () => {
       const response = await request(app.getHttpServer())
-        .post(`/api/v1/meetings/${meetingId}/decisions`)
+        .post(`/api/v1/companies/${companyId}/meetings/${meetingId}/decisions`)
         .send({
           title: 'Approve Budget',
           description: 'Vote on Q1 budget proposal',
@@ -352,7 +352,7 @@ describe('Meetings API (e2e)', () => {
       expect(response.body).toHaveProperty('id');
     });
 
-    it('POST /meetings/:id/decisions/:decisionId/vote - should cast a vote', async () => {
+    it('POST /companies/:companyId/meetings/:id/decisions/:decisionId/vote - should cast a vote', async () => {
       const decision = await prisma.decision.create({
         data: {
           meeting: { connect: { id: meetingId } },
@@ -361,7 +361,7 @@ describe('Meetings API (e2e)', () => {
       });
 
       const response = await request(app.getHttpServer())
-        .post(`/api/v1/meetings/${meetingId}/decisions/${decision.id}/vote`)
+        .post(`/api/v1/companies/${companyId}/meetings/${meetingId}/decisions/${decision.id}/vote`)
         .send({ vote: 'FOR' })
         .expect(201);
 
@@ -384,7 +384,7 @@ describe('Meetings API (e2e)', () => {
       });
 
       await request(app.getHttpServer())
-        .post(`/api/v1/meetings/${meetingId}/decisions/${decision.id}/vote`)
+        .post(`/api/v1/companies/${companyId}/meetings/${meetingId}/decisions/${decision.id}/vote`)
         .send({ vote: 'FOR' })
         .expect(400);
     });
