@@ -317,6 +317,7 @@ export default function LiveMeetingPage({
     onActionItemUpdated,
     onActionItemDeleted,
     onActionItemReordered,
+    onVoteUpdate,
   } = useMeetingSocket(id);
 
   // dnd-kit sensors for drag-and-drop
@@ -511,6 +512,30 @@ export default function LiveMeetingPage({
       unsubReordered();
     };
   }, [onDecisionCreated, onDecisionUpdated, onDecisionDeleted, onDecisionReordered]);
+
+  // Set up socket event handler for real-time vote updates
+  useEffect(() => {
+    const unsubVote = onVoteUpdate(({ decisionId, voterId, vote, tally }) => {
+      setDecisions((prev) =>
+        prev.map((d) => {
+          if (d.id !== decisionId) return d;
+          // Update votes array
+          const existingVoteIndex = d.votes?.findIndex((v: { userId: string }) => v.userId === voterId) ?? -1;
+          const newVotes = d.votes ? [...d.votes] : [];
+          if (existingVoteIndex >= 0) {
+            newVotes[existingVoteIndex] = { ...newVotes[existingVoteIndex], vote };
+          } else {
+            newVotes.push({ userId: voterId, vote, decisionId });
+          }
+          return { ...d, votes: newVotes };
+        })
+      );
+    });
+
+    return () => {
+      unsubVote();
+    };
+  }, [onVoteUpdate]);
 
   // Set up socket event handlers for real-time action item updates
   useEffect(() => {

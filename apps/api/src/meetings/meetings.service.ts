@@ -612,6 +612,29 @@ export class MeetingsService {
       },
     });
 
+    // Get updated vote tally
+    const allVotes = await this.prisma.vote.findMany({
+      where: { decisionId },
+    });
+    const tally = {
+      for: allVotes.filter((v) => v.vote === 'FOR').length,
+      against: allVotes.filter((v) => v.vote === 'AGAINST').length,
+      abstain: allVotes.filter((v) => v.vote === 'ABSTAIN').length,
+    };
+
+    // Emit socket event for real-time vote updates
+    try {
+      this.meetingsGateway.emitToMeeting(meetingId, 'vote:updated', {
+        decisionId,
+        voterId: userId,
+        vote: dto.vote,
+        tally,
+      });
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to emit vote:updated event: ${errorMessage}`);
+    }
+
     return vote;
   }
 
