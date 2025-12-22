@@ -359,6 +359,14 @@ export class MeetingsService {
       },
     });
 
+    // Emit socket event for real-time updates
+    try {
+      this.meetingsGateway.emitToMeeting(meetingId, 'agenda:created', agendaItem);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to emit agenda:created event: ${errorMessage}`);
+    }
+
     return agendaItem;
   }
 
