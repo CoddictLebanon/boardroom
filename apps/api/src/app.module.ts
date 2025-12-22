@@ -9,6 +9,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { CompaniesModule } from './companies/companies.module';
 import { MeetingsModule } from './meetings/meetings.module';
+import { AgendaItemsModule } from './agenda-items/agenda-items.module';
 import { ActionItemsModule } from './action-items/action-items.module';
 import { DocumentsModule } from './documents/documents.module';
 import { ResolutionsModule } from './resolutions/resolutions.module';
@@ -20,7 +21,7 @@ import { MonthlyFinancialsModule } from './monthly-financials/monthly-financials
 import { PermissionsModule } from './permissions/permissions.module';
 import { CustomRolesModule } from './custom-roles/custom-roles.module';
 import { MeetingNotesModule } from './meeting-notes/meeting-notes.module';
-import { AgendaItemsModule } from './agenda-items/agenda-items.module';
+import { OkrsModule } from './okrs/okrs.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { AgendaItemsModule } from './agenda-items/agenda-items.module';
     CustomRolesModule,
     CompaniesModule,
     MeetingsModule,
+    AgendaItemsModule,
     ActionItemsModule,
     DocumentsModule,
     ResolutionsModule,
@@ -50,7 +52,7 @@ import { AgendaItemsModule } from './agenda-items/agenda-items.module';
     EmailModule,
     MonthlyFinancialsModule,
     MeetingNotesModule,
-    AgendaItemsModule,
+    OkrsModule,
   ],
   controllers: [AppController],
   providers: [

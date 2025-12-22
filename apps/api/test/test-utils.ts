@@ -7,6 +7,7 @@ import { PrismaModule } from '../src/prisma/prisma.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { CompaniesModule } from '../src/companies/companies.module';
 import { MeetingsModule } from '../src/meetings/meetings.module';
+import { AgendaItemsModule } from '../src/agenda-items/agenda-items.module';
 import { ActionItemsModule } from '../src/action-items/action-items.module';
 import { DocumentsModule } from '../src/documents/documents.module';
 import { ResolutionsModule } from '../src/resolutions/resolutions.module';
@@ -17,8 +18,8 @@ import { InvitationsModule } from '../src/invitations/invitations.module';
 import { MonthlyFinancialsModule } from '../src/monthly-financials/monthly-financials.module';
 import { EmailModule } from '../src/email/email.module';
 import { MeetingNotesModule } from '../src/meeting-notes/meeting-notes.module';
-import { AgendaItemsModule } from '../src/agenda-items/agenda-items.module';
 import { GatewayModule } from '../src/gateway/gateway.module';
+import { OkrsModule } from '../src/okrs/okrs.module';
 import { AppController } from '../src/app.controller';
 import { AppService } from '../src/app.service';
 import {
@@ -112,17 +113,18 @@ export async function createTestApp(): Promise<{
       EmailModule,
       PermissionsModule,
       CustomRolesModule,
+      GatewayModule,
       CompaniesModule,
       MeetingsModule,
+      AgendaItemsModule,
       ActionItemsModule,
       DocumentsModule,
       ResolutionsModule,
       FinancialReportsModule,
       MonthlyFinancialsModule,
       InvitationsModule,
-      GatewayModule,
       MeetingNotesModule,
-      AgendaItemsModule,
+      OkrsModule,
     ],
     controllers: [AppController],
     providers: [
