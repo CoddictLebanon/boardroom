@@ -341,6 +341,13 @@ export default function LiveMeetingPage({
   const [voteDialogOpen, setVoteDialogOpen] = useState(false);
   const [voteTitle, setVoteTitle] = useState("");
   const [voteDescription, setVoteDescription] = useState("");
+
+  // Agenda item state
+  const [agendaDialogOpen, setAgendaDialogOpen] = useState(false);
+  const [agendaTitle, setAgendaTitle] = useState("");
+  const [agendaDescription, setAgendaDescription] = useState("");
+  const [agendaDuration, setAgendaDuration] = useState("");
+  const [isSubmittingAgenda, setIsSubmittingAgenda] = useState(false);
   const [includeVoting, setIncludeVoting] = useState(true);
   const [isSubmittingVote, setIsSubmittingVote] = useState(false);
   const [isCastingVote, setIsCastingVote] = useState(false);
@@ -713,6 +720,42 @@ export default function LiveMeetingPage({
     setVoteTitle("");
     setVoteDescription("");
     setIncludeVoting(true);
+  };
+
+  const resetAgendaForm = () => {
+    setAgendaTitle("");
+    setAgendaDescription("");
+    setAgendaDuration("");
+  };
+
+  const handleCreateAgendaItem = async () => {
+    if (!agendaTitle.trim()) return;
+    try {
+      setIsSubmittingAgenda(true);
+      const token = await getToken();
+      const response = await fetch(`${API_URL}/companies/${companyId}/meetings/${id}/agenda`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: agendaTitle.trim(),
+          description: agendaDescription.trim() || undefined,
+          duration: agendaDuration ? parseInt(agendaDuration, 10) : undefined,
+        }),
+      });
+      if (!response.ok) throw new Error("Failed to create agenda item");
+
+      setAgendaDialogOpen(false);
+      resetAgendaForm();
+      // Socket event will handle adding the agenda item to the list
+    } catch (error) {
+      console.error("Error creating agenda item:", error);
+      alert("Failed to create agenda item. Please try again.");
+    } finally {
+      setIsSubmittingAgenda(false);
+    }
   };
 
   const handleCreateDecision = async () => {
@@ -1142,14 +1185,22 @@ export default function LiveMeetingPage({
         {/* Agenda Section */}
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
-              <div className="rounded-lg bg-blue-100 p-2">
-                <FileText className="h-5 w-5 text-blue-600" />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="rounded-lg bg-blue-100 p-2">
+                  <FileText className="h-5 w-5 text-blue-600" />
+                </div>
+                <div>
+                  <CardTitle>Agenda</CardTitle>
+                  <CardDescription>{agendaItems.length} items</CardDescription>
+                </div>
               </div>
-              <div>
-                <CardTitle>Agenda</CardTitle>
-                <CardDescription>{agendaItems.length} items</CardDescription>
-              </div>
+              {isActive && (
+                <Button size="sm" onClick={() => setAgendaDialogOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Agenda Item
+                </Button>
+              )}
             </div>
           </CardHeader>
           <CardContent>
@@ -1192,6 +1243,12 @@ export default function LiveMeetingPage({
               <div className="py-8 text-center">
                 <FileText className="mx-auto h-8 w-8 text-muted-foreground/50" />
                 <p className="mt-2 text-sm text-muted-foreground">No agenda items</p>
+                {isActive && (
+                  <Button size="sm" variant="outline" className="mt-4" onClick={() => setAgendaDialogOpen(true)}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Agenda Item
+                  </Button>
+                )}
               </div>
             )}
           </CardContent>
@@ -1643,6 +1700,58 @@ export default function LiveMeetingPage({
             <Button onClick={handleCreateDecision} disabled={isSubmittingVote || !voteTitle.trim()}>
               {isSubmittingVote && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {includeVoting ? "Start Vote" : "Add Decision"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Agenda Item Dialog */}
+      <Dialog open={agendaDialogOpen} onOpenChange={(open) => {
+        setAgendaDialogOpen(open);
+        if (!open) resetAgendaForm();
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Agenda Item</DialogTitle>
+            <DialogDescription>Add a new item to the meeting agenda.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="agenda-title">Title</Label>
+              <Input
+                id="agenda-title"
+                placeholder="e.g., Review Q4 financials"
+                value={agendaTitle}
+                onChange={(e) => setAgendaTitle(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="agenda-description">Description (optional)</Label>
+              <Textarea
+                id="agenda-description"
+                placeholder="Additional details about this agenda item..."
+                value={agendaDescription}
+                onChange={(e) => setAgendaDescription(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="agenda-duration">Duration (minutes, optional)</Label>
+              <Input
+                id="agenda-duration"
+                type="number"
+                placeholder="e.g., 15"
+                value={agendaDuration}
+                onChange={(e) => setAgendaDuration(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAgendaDialogOpen(false)} disabled={isSubmittingAgenda}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateAgendaItem} disabled={isSubmittingAgenda || !agendaTitle.trim()}>
+              {isSubmittingAgenda && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Add Item
             </Button>
           </DialogFooter>
         </DialogContent>
