@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -30,7 +30,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, ChevronDown, ChevronRight, Pencil, Trash2, Loader2, Calendar } from "lucide-react";
+import { Plus, ChevronDown, ChevronRight, Pencil, Trash2, Loader2, Calendar, GripVertical } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useAuth } from "@clerk/nextjs";
 import { useParams } from "next/navigation";
 import { usePermission } from "@/lib/permissions";
@@ -142,6 +159,259 @@ function recalculatePeriodProgress(period: OkrPeriod): OkrPeriod {
   };
 }
 
+// Sortable Objective Row Component
+interface SortableObjectiveRowProps {
+  objective: Objective;
+  isExpanded: boolean;
+  onToggle: () => void;
+  onEdit: () => void;
+  onAddKeyResult: () => void;
+  onDelete: () => void;
+  canEdit: boolean;
+  canCreate: boolean;
+  canDelete: boolean;
+  isPeriodOpen: boolean;
+}
+
+function SortableObjectiveRow({
+  objective,
+  isExpanded,
+  onToggle,
+  onEdit,
+  onAddKeyResult,
+  onDelete,
+  canEdit,
+  canCreate,
+  canDelete,
+  isPeriodOpen,
+}: SortableObjectiveRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: objective.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <TableRow ref={setNodeRef} style={style}>
+      <TableCell className="w-[40px]">
+        <div className="flex items-center gap-1">
+          {canEdit && isPeriodOpen && (
+            <button
+              {...attributes}
+              {...listeners}
+              className="cursor-grab hover:bg-muted rounded p-1 touch-none"
+            >
+              <GripVertical className="h-4 w-4 text-muted-foreground" />
+            </button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onToggle}
+          >
+            {isExpanded ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+      </TableCell>
+      <TableCell className="font-medium">{objective.title}</TableCell>
+      <TableCell>
+        <div className="flex items-center gap-2">
+          <Progress value={objective.progress} className="w-20" />
+          <span className="text-sm">{Math.round(objective.progress)}%</span>
+        </div>
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-1">
+          {canEdit && isPeriodOpen && (
+            <Button variant="ghost" size="icon-sm" onClick={onEdit}>
+              <Pencil className="h-4 w-4" />
+            </Button>
+          )}
+          {canCreate && isPeriodOpen && (
+            <Button variant="ghost" size="icon-sm" onClick={onAddKeyResult}>
+              <Plus className="h-4 w-4" />
+            </Button>
+          )}
+          {canDelete && isPeriodOpen && (
+            <Button variant="ghost" size="icon-sm" onClick={onDelete}>
+              <Trash2 className="h-4 w-4 text-red-500" />
+            </Button>
+          )}
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+// Sortable Key Result Row Component
+interface SortableKeyResultRowProps {
+  kr: KeyResult;
+  objectiveId: string;
+  editingCell: { krId: string; field: "currentValue" | "comment" } | null;
+  editValue: string;
+  setEditingCell: (cell: { krId: string; field: "currentValue" | "comment" } | null) => void;
+  setEditValue: (value: string) => void;
+  handleInlineEdit: (objectiveId: string, krId: string, field: "currentValue" | "comment", value: string) => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  canEdit: boolean;
+  canDelete: boolean;
+  isPeriodOpen: boolean;
+}
+
+function SortableKeyResultRow({
+  kr,
+  objectiveId,
+  editingCell,
+  editValue,
+  setEditingCell,
+  setEditValue,
+  handleInlineEdit,
+  onEdit,
+  onDelete,
+  canEdit,
+  canDelete,
+  isPeriodOpen,
+}: SortableKeyResultRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: kr.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <TableRow ref={setNodeRef} style={style}>
+      <TableCell>
+        <div className="flex items-center gap-2">
+          {canEdit && isPeriodOpen && (
+            <button
+              {...attributes}
+              {...listeners}
+              className="cursor-grab hover:bg-muted rounded p-1 touch-none"
+            >
+              <GripVertical className="h-4 w-4 text-muted-foreground" />
+            </button>
+          )}
+          <span>{kr.title}</span>
+        </div>
+      </TableCell>
+      <TableCell>{formatMetricValue(kr.startValue, kr.metricType)}</TableCell>
+      <TableCell>{formatMetricValue(kr.targetValue, kr.metricType)}</TableCell>
+      <TableCell
+        className={canEdit && isPeriodOpen ? "cursor-pointer hover:bg-muted/50" : ""}
+        onClick={() => {
+          if (canEdit && isPeriodOpen) {
+            setEditingCell({ krId: kr.id, field: "currentValue" });
+            setEditValue(String(kr.currentValue));
+          }
+        }}
+      >
+        {editingCell?.krId === kr.id && editingCell?.field === "currentValue" ? (
+          kr.metricType === "BOOLEAN" ? (
+            <Select
+              value={editValue === "1" ? "done" : "pending"}
+              onValueChange={(value) => {
+                const numValue = value === "done" ? "1" : "0";
+                handleInlineEdit(objectiveId, kr.id, "currentValue", numValue);
+              }}
+            >
+              <SelectTrigger className="w-24" autoFocus>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="done">Done</SelectItem>
+              </SelectContent>
+            </Select>
+          ) : (
+            <Input
+              type="number"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={() => handleInlineEdit(objectiveId, kr.id, "currentValue", editValue)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleInlineEdit(objectiveId, kr.id, "currentValue", editValue);
+                if (e.key === "Escape") setEditingCell(null);
+              }}
+              autoFocus
+              className="w-24"
+            />
+          )
+        ) : (
+          formatMetricValue(kr.currentValue, kr.metricType)
+        )}
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-2">
+          <Progress value={kr.progress} className="w-16" />
+          <span className="text-sm">{Math.round(kr.progress)}%</span>
+        </div>
+      </TableCell>
+      <TableCell
+        className={canEdit && isPeriodOpen ? "cursor-pointer hover:bg-muted/50" : ""}
+        onClick={() => {
+          if (canEdit && isPeriodOpen) {
+            setEditingCell({ krId: kr.id, field: "comment" });
+            setEditValue(kr.comment || "");
+          }
+        }}
+      >
+        {editingCell?.krId === kr.id && editingCell?.field === "comment" ? (
+          <Input
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={() => handleInlineEdit(objectiveId, kr.id, "comment", editValue)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleInlineEdit(objectiveId, kr.id, "comment", editValue);
+              if (e.key === "Escape") setEditingCell(null);
+            }}
+            autoFocus
+            className="w-full"
+          />
+        ) : (
+          <span className="text-sm text-muted-foreground">{kr.comment || "-"}</span>
+        )}
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-1">
+          {canEdit && isPeriodOpen && (
+            <Button variant="ghost" size="icon-sm" onClick={onEdit}>
+              <Pencil className="h-4 w-4" />
+            </Button>
+          )}
+          {canDelete && isPeriodOpen && (
+            <Button variant="ghost" size="icon-sm" onClick={onDelete}>
+              <Trash2 className="h-4 w-4 text-red-500" />
+            </Button>
+          )}
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
+
 export default function OKRsPage() {
   const { getToken } = useAuth();
   const params = useParams();
@@ -191,6 +461,18 @@ export default function OKRsPage() {
     field: "currentValue" | "comment";
   } | null>(null);
   const [editValue, setEditValue] = useState("");
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   // Load periods
   const loadPeriods = useCallback(async () => {
@@ -562,6 +844,92 @@ export default function OKRsPage() {
     setExpandedObjectives(newExpanded);
   };
 
+  // Handle objective reorder via drag and drop
+  const handleObjectiveDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !selectedPeriodId) return;
+
+    const period = periods.find((p) => p.id === selectedPeriodId);
+    if (!period?.objectives) return;
+
+    const oldIndex = period.objectives.findIndex((o) => o.id === active.id);
+    const newIndex = period.objectives.findIndex((o) => o.id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    // Optimistically update UI
+    const reorderedObjectives = arrayMove(period.objectives, oldIndex, newIndex);
+    setPeriods(
+      periods.map((p) =>
+        p.id === selectedPeriodId ? { ...p, objectives: reorderedObjectives } : p
+      )
+    );
+
+    // Update orders in backend
+    try {
+      const token = await getToken();
+      if (!token) return;
+
+      // Update each affected objective's order
+      await Promise.all(
+        reorderedObjectives.map((obj, index) =>
+          updateObjective(companyId, selectedPeriodId, obj.id, { order: index }, token)
+        )
+      );
+    } catch (error) {
+      console.error("Error reordering objectives:", error);
+      // Revert on error
+      loadPeriods();
+    }
+  };
+
+  // Handle key result reorder via drag and drop
+  const handleKeyResultDragEnd = async (event: DragEndEvent, objectiveId: string) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !selectedPeriodId) return;
+
+    const period = periods.find((p) => p.id === selectedPeriodId);
+    const objective = period?.objectives?.find((o) => o.id === objectiveId);
+    if (!objective?.keyResults) return;
+
+    const oldIndex = objective.keyResults.findIndex((kr) => kr.id === active.id);
+    const newIndex = objective.keyResults.findIndex((kr) => kr.id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    // Optimistically update UI
+    const reorderedKeyResults = arrayMove(objective.keyResults, oldIndex, newIndex);
+    setPeriods(
+      periods.map((p) =>
+        p.id === selectedPeriodId
+          ? {
+              ...p,
+              objectives: (p.objectives || []).map((obj) =>
+                obj.id === objectiveId ? { ...obj, keyResults: reorderedKeyResults } : obj
+              ),
+            }
+          : p
+      )
+    );
+
+    // Update orders in backend
+    try {
+      const token = await getToken();
+      if (!token) return;
+
+      // Update each affected key result's order
+      await Promise.all(
+        reorderedKeyResults.map((kr, index) =>
+          updateKeyResult(companyId, selectedPeriodId, objectiveId, kr.id, { order: index }, token)
+        )
+      );
+    } catch (error) {
+      console.error("Error reordering key results:", error);
+      // Revert on error
+      loadPeriods();
+    }
+  };
+
   if (!canView) {
     return (
       <div className="space-y-6">
@@ -749,225 +1117,94 @@ export default function OKRsPage() {
                     No objectives yet. Add one to get started.
                   </div>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[40px]"></TableHead>
-                        <TableHead>Title</TableHead>
-                        <TableHead className="w-[120px]">Progress</TableHead>
-                        <TableHead className="w-[100px]">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {selectedPeriod.objectives.map((objective) => (
-                        <>
-                          <TableRow key={objective.id}>
-                            <TableCell>
-                              <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                onClick={() => toggleObjective(objective.id)}
-                              >
-                                {expandedObjectives.has(objective.id) ? (
-                                  <ChevronDown className="h-4 w-4" />
-                                ) : (
-                                  <ChevronRight className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </TableCell>
-                            <TableCell className="font-medium">{objective.title}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Progress value={objective.progress} className="w-20" />
-                                <span className="text-sm">{Math.round(objective.progress)}%</span>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-1">
-                                {canEdit && selectedPeriod.status === "OPEN" && (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    onClick={() => {
-                                      setObjectiveForm({
-                                        id: objective.id,
-                                        title: objective.title,
-                                      });
-                                      setObjectiveDialogOpen(true);
-                                    }}
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </Button>
-                                )}
-                                {canCreate && selectedPeriod.status === "OPEN" && (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    onClick={() => {
-                                      setKeyResultForm({
-                                        objectiveId: objective.id,
-                                        title: "",
-                                        metricType: "NUMERIC",
-                                        startValue: 0,
-                                        targetValue: 100,
-                                        currentValue: 0,
-                                        inverse: false,
-                                      });
-                                      setKeyResultDialogOpen(true);
-                                    }}
-                                  >
-                                    <Plus className="h-4 w-4" />
-                                  </Button>
-                                )}
-                                {canDelete && selectedPeriod.status === "OPEN" && (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    onClick={() => handleDeleteObjective(objective.id)}
-                                  >
-                                    <Trash2 className="h-4 w-4 text-red-500" />
-                                  </Button>
-                                )}
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                          {expandedObjectives.has(objective.id) &&
-                            objective.keyResults &&
-                            objective.keyResults.length > 0 && (
-                              <TableRow>
-                                <TableCell colSpan={4} className="bg-muted/30">
-                                  <Table>
-                                    <TableHeader>
-                                      <TableRow>
-                                        <TableHead>Key Result</TableHead>
-                                        <TableHead className="w-[100px]">Start</TableHead>
-                                        <TableHead className="w-[100px]">Target</TableHead>
-                                        <TableHead className="w-[100px]">Current</TableHead>
-                                        <TableHead className="w-[120px]">Progress</TableHead>
-                                        <TableHead className="w-[200px]">Comment</TableHead>
-                                        <TableHead className="w-[100px]">Actions</TableHead>
-                                      </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                      {objective.keyResults.map((kr) => (
-                                        <TableRow key={kr.id}>
-                                          <TableCell>{kr.title}</TableCell>
-                                          <TableCell>{formatMetricValue(kr.startValue, kr.metricType)}</TableCell>
-                                          <TableCell>{formatMetricValue(kr.targetValue, kr.metricType)}</TableCell>
-                                          <TableCell
-                                            className={
-                                              canEdit && selectedPeriod.status === "OPEN"
-                                                ? "cursor-pointer hover:bg-muted/50"
-                                                : ""
-                                            }
-                                            onClick={() => {
-                                              if (canEdit && selectedPeriod.status === "OPEN") {
-                                                setEditingCell({ krId: kr.id, field: "currentValue" });
-                                                setEditValue(String(kr.currentValue));
-                                              }
-                                            }}
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleObjectiveDragEnd}
+                  >
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[60px]"></TableHead>
+                          <TableHead>Title</TableHead>
+                          <TableHead className="w-[120px]">Progress</TableHead>
+                          <TableHead className="w-[100px]">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <SortableContext
+                        items={selectedPeriod.objectives.map((o) => o.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        <TableBody>
+                          {selectedPeriod.objectives.map((objective) => (
+                            <React.Fragment key={objective.id}>
+                              <SortableObjectiveRow
+                                objective={objective}
+                                isExpanded={expandedObjectives.has(objective.id)}
+                                onToggle={() => toggleObjective(objective.id)}
+                                onEdit={() => {
+                                  setObjectiveForm({
+                                    id: objective.id,
+                                    title: objective.title,
+                                  });
+                                  setObjectiveDialogOpen(true);
+                                }}
+                                onAddKeyResult={() => {
+                                  setKeyResultForm({
+                                    objectiveId: objective.id,
+                                    title: "",
+                                    metricType: "NUMERIC",
+                                    startValue: 0,
+                                    targetValue: 100,
+                                    currentValue: 0,
+                                    inverse: false,
+                                  });
+                                  setKeyResultDialogOpen(true);
+                                }}
+                                onDelete={() => handleDeleteObjective(objective.id)}
+                                canEdit={canEdit}
+                                canCreate={canCreate}
+                                canDelete={canDelete}
+                                isPeriodOpen={selectedPeriod.status === "OPEN"}
+                              />
+                              {expandedObjectives.has(objective.id) &&
+                                objective.keyResults &&
+                                objective.keyResults.length > 0 && (
+                                  <TableRow>
+                                    <TableCell colSpan={4} className="bg-muted/30 p-4">
+                                      <DndContext
+                                        sensors={sensors}
+                                        collisionDetection={closestCenter}
+                                        onDragEnd={(event) => handleKeyResultDragEnd(event, objective.id)}
+                                      >
+                                        <Table>
+                                          <TableHeader>
+                                            <TableRow>
+                                              <TableHead>Key Result</TableHead>
+                                              <TableHead className="w-[100px]">Start</TableHead>
+                                              <TableHead className="w-[100px]">Target</TableHead>
+                                              <TableHead className="w-[100px]">Current</TableHead>
+                                              <TableHead className="w-[120px]">Progress</TableHead>
+                                              <TableHead className="w-[200px]">Comment</TableHead>
+                                              <TableHead className="w-[100px]">Actions</TableHead>
+                                            </TableRow>
+                                          </TableHeader>
+                                          <SortableContext
+                                            items={objective.keyResults.map((kr) => kr.id)}
+                                            strategy={verticalListSortingStrategy}
                                           >
-                                            {editingCell?.krId === kr.id &&
-                                            editingCell?.field === "currentValue" ? (
-                                              kr.metricType === "BOOLEAN" ? (
-                                                <Select
-                                                  value={editValue === "1" ? "done" : "pending"}
-                                                  onValueChange={(value) => {
-                                                    const numValue = value === "done" ? "1" : "0";
-                                                    handleInlineEdit(
-                                                      objective.id,
-                                                      kr.id,
-                                                      "currentValue",
-                                                      numValue
-                                                    );
-                                                  }}
-                                                >
-                                                  <SelectTrigger className="w-24" autoFocus>
-                                                    <SelectValue />
-                                                  </SelectTrigger>
-                                                  <SelectContent>
-                                                    <SelectItem value="pending">Pending</SelectItem>
-                                                    <SelectItem value="done">Done</SelectItem>
-                                                  </SelectContent>
-                                                </Select>
-                                              ) : (
-                                                <Input
-                                                  type="number"
-                                                  value={editValue}
-                                                  onChange={(e) => setEditValue(e.target.value)}
-                                                  onBlur={() =>
-                                                    handleInlineEdit(
-                                                      objective.id,
-                                                      kr.id,
-                                                      "currentValue",
-                                                      editValue
-                                                    )
-                                                  }
-                                                  onKeyDown={(e) => {
-                                                    if (e.key === "Enter")
-                                                      handleInlineEdit(
-                                                        objective.id,
-                                                        kr.id,
-                                                        "currentValue",
-                                                        editValue
-                                                      );
-                                                    if (e.key === "Escape") setEditingCell(null);
-                                                  }}
-                                                  autoFocus
-                                                  className="w-24"
-                                                />
-                                              )
-                                            ) : (
-                                              formatMetricValue(kr.currentValue, kr.metricType)
-                                            )}
-                                          </TableCell>
-                                          <TableCell>
-                                            <div className="flex items-center gap-2">
-                                              <Progress value={kr.progress} className="w-16" />
-                                              <span className="text-sm">{Math.round(kr.progress)}%</span>
-                                            </div>
-                                          </TableCell>
-                                          <TableCell
-                                            className={
-                                              canEdit && selectedPeriod.status === "OPEN"
-                                                ? "cursor-pointer hover:bg-muted/50"
-                                                : ""
-                                            }
-                                            onClick={() => {
-                                              if (canEdit && selectedPeriod.status === "OPEN") {
-                                                setEditingCell({ krId: kr.id, field: "comment" });
-                                                setEditValue(kr.comment || "");
-                                              }
-                                            }}
-                                          >
-                                            {editingCell?.krId === kr.id && editingCell?.field === "comment" ? (
-                                              <Input
-                                                value={editValue}
-                                                onChange={(e) => setEditValue(e.target.value)}
-                                                onBlur={() =>
-                                                  handleInlineEdit(objective.id, kr.id, "comment", editValue)
-                                                }
-                                                onKeyDown={(e) => {
-                                                  if (e.key === "Enter")
-                                                    handleInlineEdit(objective.id, kr.id, "comment", editValue);
-                                                  if (e.key === "Escape") setEditingCell(null);
-                                                }}
-                                                autoFocus
-                                                className="w-full"
-                                              />
-                                            ) : (
-                                              <span className="text-sm text-muted-foreground">
-                                                {kr.comment || "-"}
-                                              </span>
-                                            )}
-                                          </TableCell>
-                                          <TableCell>
-                                            <div className="flex items-center gap-1">
-                                              {canEdit && selectedPeriod.status === "OPEN" && (
-                                                <Button
-                                                  variant="ghost"
-                                                  size="icon-sm"
-                                                  onClick={() => {
+                                            <TableBody>
+                                              {objective.keyResults.map((kr) => (
+                                                <SortableKeyResultRow
+                                                  key={kr.id}
+                                                  kr={kr}
+                                                  objectiveId={objective.id}
+                                                  editingCell={editingCell}
+                                                  editValue={editValue}
+                                                  setEditingCell={setEditingCell}
+                                                  setEditValue={setEditValue}
+                                                  handleInlineEdit={handleInlineEdit}
+                                                  onEdit={() => {
                                                     setKeyResultForm({
                                                       id: kr.id,
                                                       objectiveId: objective.id,
@@ -981,32 +1218,25 @@ export default function OKRsPage() {
                                                     });
                                                     setKeyResultDialogOpen(true);
                                                   }}
-                                                >
-                                                  <Pencil className="h-4 w-4" />
-                                                </Button>
-                                              )}
-                                              {canDelete && selectedPeriod.status === "OPEN" && (
-                                                <Button
-                                                  variant="ghost"
-                                                  size="icon-sm"
-                                                  onClick={() => handleDeleteKeyResult(objective.id, kr.id)}
-                                                >
-                                                  <Trash2 className="h-4 w-4 text-red-500" />
-                                                </Button>
-                                              )}
-                                            </div>
-                                          </TableCell>
-                                        </TableRow>
-                                      ))}
-                                    </TableBody>
-                                  </Table>
-                                </TableCell>
-                              </TableRow>
-                            )}
-                        </>
-                      ))}
-                    </TableBody>
-                  </Table>
+                                                  onDelete={() => handleDeleteKeyResult(objective.id, kr.id)}
+                                                  canEdit={canEdit}
+                                                  canDelete={canDelete}
+                                                  isPeriodOpen={selectedPeriod.status === "OPEN"}
+                                                />
+                                              ))}
+                                            </TableBody>
+                                          </SortableContext>
+                                        </Table>
+                                      </DndContext>
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                            </React.Fragment>
+                          ))}
+                        </TableBody>
+                      </SortableContext>
+                    </Table>
+                  </DndContext>
                 )}
               </CardContent>
             </Card>
