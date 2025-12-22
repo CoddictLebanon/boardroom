@@ -66,7 +66,7 @@ function formatMetricValue(value: number, metricType: MetricType): string {
         maximumFractionDigits: 0,
       }).format(value);
     case "BOOLEAN":
-      return value >= 1 ? "Yes" : "No";
+      return value >= 1 ? "Done" : "Pending";
     case "NUMERIC":
     default:
       return String(value);
@@ -78,6 +78,68 @@ function getDaysRemaining(endDate: string): number {
   const now = new Date();
   const diff = end.getTime() - now.getTime();
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
+
+// Progress calculation functions (match backend logic)
+function calculateKeyResultProgress(kr: KeyResult): number {
+  const start = kr.startValue;
+  const target = kr.targetValue;
+  const current = kr.currentValue;
+
+  // Boolean type: 0% or 100%
+  if (kr.metricType === "BOOLEAN") {
+    return current >= 1 ? 100 : 0;
+  }
+
+  const range = target - start;
+  if (range === 0) return current >= target ? 100 : 0;
+
+  let progress: number;
+  if (kr.inverse) {
+    // Lower is better
+    progress = ((start - current) / (start - target)) * 100;
+  } else {
+    // Higher is better
+    progress = ((current - start) / (target - start)) * 100;
+  }
+
+  // Clamp between 0 and 100
+  return Math.min(100, Math.max(0, progress));
+}
+
+function calculateObjectiveProgress(keyResults: KeyResult[]): number {
+  if (keyResults.length === 0) return 0;
+  const sum = keyResults.reduce((acc, kr) => acc + calculateKeyResultProgress(kr), 0);
+  return sum / keyResults.length;
+}
+
+function calculatePeriodScore(objectives: Objective[]): number {
+  if (objectives.length === 0) return 0;
+  const sum = objectives.reduce((acc, obj) => {
+    const objProgress = calculateObjectiveProgress(obj.keyResults || []);
+    return acc + objProgress;
+  }, 0);
+  return sum / objectives.length;
+}
+
+// Recalculate all progress values for a period
+function recalculatePeriodProgress(period: OkrPeriod): OkrPeriod {
+  const objectives = (period.objectives || []).map((obj) => {
+    const keyResults = (obj.keyResults || []).map((kr) => ({
+      ...kr,
+      progress: calculateKeyResultProgress(kr),
+    }));
+    return {
+      ...obj,
+      keyResults,
+      progress: calculateObjectiveProgress(keyResults),
+    };
+  });
+  return {
+    ...period,
+    objectives,
+    score: calculatePeriodScore(objectives),
+  };
 }
 
 export default function OKRsPage() {
@@ -351,18 +413,18 @@ export default function OKRsPage() {
       const newKR = await createKeyResult(companyId, selectedPeriodId, objectiveId, data, token);
 
       setPeriods(
-        periods.map((p) =>
-          p.id === selectedPeriodId
-            ? {
-                ...p,
-                objectives: (p.objectives || []).map((obj) =>
-                  obj.id === objectiveId
-                    ? { ...obj, keyResults: [...(obj.keyResults || []), newKR] }
-                    : obj
-                ),
-              }
-            : p
-        )
+        periods.map((p) => {
+          if (p.id !== selectedPeriodId) return p;
+          const updatedPeriod = {
+            ...p,
+            objectives: (p.objectives || []).map((obj) =>
+              obj.id === objectiveId
+                ? { ...obj, keyResults: [...(obj.keyResults || []), newKR] }
+                : obj
+            ),
+          };
+          return recalculatePeriodProgress(updatedPeriod);
+        })
       );
       setKeyResultDialogOpen(false);
       setKeyResultForm({
@@ -389,21 +451,21 @@ export default function OKRsPage() {
       const updated = await updateKeyResult(companyId, selectedPeriodId, objectiveId, id, data, token);
 
       setPeriods(
-        periods.map((p) =>
-          p.id === selectedPeriodId
-            ? {
-                ...p,
-                objectives: (p.objectives || []).map((obj) =>
-                  obj.id === objectiveId
-                    ? {
-                        ...obj,
-                        keyResults: (obj.keyResults || []).map((kr) => (kr.id === id ? updated : kr)),
-                      }
-                    : obj
-                ),
-              }
-            : p
-        )
+        periods.map((p) => {
+          if (p.id !== selectedPeriodId) return p;
+          const updatedPeriod = {
+            ...p,
+            objectives: (p.objectives || []).map((obj) =>
+              obj.id === objectiveId
+                ? {
+                    ...obj,
+                    keyResults: (obj.keyResults || []).map((kr) => (kr.id === id ? updated : kr)),
+                  }
+                : obj
+            ),
+          };
+          return recalculatePeriodProgress(updatedPeriod);
+        })
       );
       setKeyResultDialogOpen(false);
       setKeyResultForm({
@@ -429,18 +491,18 @@ export default function OKRsPage() {
 
       await deleteKeyResult(companyId, selectedPeriodId, objectiveId, keyResultId, token);
       setPeriods(
-        periods.map((p) =>
-          p.id === selectedPeriodId
-            ? {
-                ...p,
-                objectives: (p.objectives || []).map((obj) =>
-                  obj.id === objectiveId
-                    ? { ...obj, keyResults: (obj.keyResults || []).filter((kr) => kr.id !== keyResultId) }
-                    : obj
-                ),
-              }
-            : p
-        )
+        periods.map((p) => {
+          if (p.id !== selectedPeriodId) return p;
+          const updatedPeriod = {
+            ...p,
+            objectives: (p.objectives || []).map((obj) =>
+              obj.id === objectiveId
+                ? { ...obj, keyResults: (obj.keyResults || []).filter((kr) => kr.id !== keyResultId) }
+                : obj
+            ),
+          };
+          return recalculatePeriodProgress(updatedPeriod);
+        })
       );
     } catch (error) {
       console.error("Error deleting key result:", error);
@@ -464,23 +526,23 @@ export default function OKRsPage() {
       const updated = await updateKeyResult(companyId, selectedPeriodId, objectiveId, keyResultId, data, token);
 
       setPeriods(
-        periods.map((p) =>
-          p.id === selectedPeriodId
-            ? {
-                ...p,
-                objectives: (p.objectives || []).map((obj) =>
-                  obj.id === objectiveId
-                    ? {
-                        ...obj,
-                        keyResults: (obj.keyResults || []).map((kr) =>
-                          kr.id === keyResultId ? updated : kr
-                        ),
-                      }
-                    : obj
-                ),
-              }
-            : p
-        )
+        periods.map((p) => {
+          if (p.id !== selectedPeriodId) return p;
+          const updatedPeriod = {
+            ...p,
+            objectives: (p.objectives || []).map((obj) =>
+              obj.id === objectiveId
+                ? {
+                    ...obj,
+                    keyResults: (obj.keyResults || []).map((kr) =>
+                      kr.id === keyResultId ? updated : kr
+                    ),
+                  }
+                : obj
+            ),
+          };
+          return recalculatePeriodProgress(updatedPeriod);
+        })
       );
       setEditingCell(null);
       setEditValue("");
@@ -807,31 +869,54 @@ export default function OKRsPage() {
                                           >
                                             {editingCell?.krId === kr.id &&
                                             editingCell?.field === "currentValue" ? (
-                                              <Input
-                                                type="number"
-                                                value={editValue}
-                                                onChange={(e) => setEditValue(e.target.value)}
-                                                onBlur={() =>
-                                                  handleInlineEdit(
-                                                    objective.id,
-                                                    kr.id,
-                                                    "currentValue",
-                                                    editValue
-                                                  )
-                                                }
-                                                onKeyDown={(e) => {
-                                                  if (e.key === "Enter")
+                                              kr.metricType === "BOOLEAN" ? (
+                                                <Select
+                                                  value={editValue === "1" ? "done" : "pending"}
+                                                  onValueChange={(value) => {
+                                                    const numValue = value === "done" ? "1" : "0";
+                                                    handleInlineEdit(
+                                                      objective.id,
+                                                      kr.id,
+                                                      "currentValue",
+                                                      numValue
+                                                    );
+                                                  }}
+                                                >
+                                                  <SelectTrigger className="w-24" autoFocus>
+                                                    <SelectValue />
+                                                  </SelectTrigger>
+                                                  <SelectContent>
+                                                    <SelectItem value="pending">Pending</SelectItem>
+                                                    <SelectItem value="done">Done</SelectItem>
+                                                  </SelectContent>
+                                                </Select>
+                                              ) : (
+                                                <Input
+                                                  type="number"
+                                                  value={editValue}
+                                                  onChange={(e) => setEditValue(e.target.value)}
+                                                  onBlur={() =>
                                                     handleInlineEdit(
                                                       objective.id,
                                                       kr.id,
                                                       "currentValue",
                                                       editValue
-                                                    );
-                                                  if (e.key === "Escape") setEditingCell(null);
-                                                }}
-                                                autoFocus
-                                                className="w-24"
-                                              />
+                                                    )
+                                                  }
+                                                  onKeyDown={(e) => {
+                                                    if (e.key === "Enter")
+                                                      handleInlineEdit(
+                                                        objective.id,
+                                                        kr.id,
+                                                        "currentValue",
+                                                        editValue
+                                                      );
+                                                    if (e.key === "Escape") setEditingCell(null);
+                                                  }}
+                                                  autoFocus
+                                                  className="w-24"
+                                                />
+                                              )
                                             ) : (
                                               formatMetricValue(kr.currentValue, kr.metricType)
                                             )}
@@ -1032,9 +1117,20 @@ export default function OKRsPage() {
               <Label htmlFor="kr-metric-type">Metric Type</Label>
               <Select
                 value={keyResultForm.metricType}
-                onValueChange={(value: MetricType) =>
-                  setKeyResultForm({ ...keyResultForm, metricType: value })
-                }
+                onValueChange={(value: MetricType) => {
+                  // Set appropriate defaults when switching to BOOLEAN
+                  if (value === "BOOLEAN") {
+                    setKeyResultForm({
+                      ...keyResultForm,
+                      metricType: value,
+                      startValue: 0,
+                      targetValue: 1,
+                      currentValue: (keyResultForm.currentValue ?? 0) >= 1 ? 1 : 0,
+                    });
+                  } else {
+                    setKeyResultForm({ ...keyResultForm, metricType: value });
+                  }
+                }}
               >
                 <SelectTrigger id="kr-metric-type">
                   <SelectValue />
@@ -1047,50 +1143,77 @@ export default function OKRsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            {keyResultForm.metricType === "BOOLEAN" ? (
               <div>
-                <Label htmlFor="kr-start">Start Value</Label>
-                <Input
-                  id="kr-start"
-                  type="number"
-                  value={keyResultForm.startValue}
-                  onChange={(e) =>
-                    setKeyResultForm({ ...keyResultForm, startValue: parseFloat(e.target.value) || 0 })
+                <Label htmlFor="kr-status">Status</Label>
+                <Select
+                  value={(keyResultForm.currentValue ?? 0) >= 1 ? "done" : "pending"}
+                  onValueChange={(value) =>
+                    setKeyResultForm({
+                      ...keyResultForm,
+                      currentValue: value === "done" ? 1 : 0,
+                      startValue: 0,
+                      targetValue: 1,
+                    })
                   }
-                />
+                >
+                  <SelectTrigger id="kr-status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="done">Done</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <div>
-                <Label htmlFor="kr-target">Target Value</Label>
-                <Input
-                  id="kr-target"
-                  type="number"
-                  value={keyResultForm.targetValue}
-                  onChange={(e) =>
-                    setKeyResultForm({ ...keyResultForm, targetValue: parseFloat(e.target.value) || 0 })
-                  }
-                />
-              </div>
-              <div>
-                <Label htmlFor="kr-current">Current Value</Label>
-                <Input
-                  id="kr-current"
-                  type="number"
-                  value={keyResultForm.currentValue}
-                  onChange={(e) =>
-                    setKeyResultForm({ ...keyResultForm, currentValue: parseFloat(e.target.value) || 0 })
-                  }
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="kr-inverse"
-                checked={keyResultForm.inverse}
-                onChange={(e) => setKeyResultForm({ ...keyResultForm, inverse: e.target.checked })}
-              />
-              <Label htmlFor="kr-inverse">Inverse (lower is better)</Label>
-            </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="kr-start">Start Value</Label>
+                    <Input
+                      id="kr-start"
+                      type="number"
+                      value={keyResultForm.startValue}
+                      onChange={(e) =>
+                        setKeyResultForm({ ...keyResultForm, startValue: parseFloat(e.target.value) || 0 })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="kr-target">Target Value</Label>
+                    <Input
+                      id="kr-target"
+                      type="number"
+                      value={keyResultForm.targetValue}
+                      onChange={(e) =>
+                        setKeyResultForm({ ...keyResultForm, targetValue: parseFloat(e.target.value) || 0 })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="kr-current">Current Value</Label>
+                    <Input
+                      id="kr-current"
+                      type="number"
+                      value={keyResultForm.currentValue}
+                      onChange={(e) =>
+                        setKeyResultForm({ ...keyResultForm, currentValue: parseFloat(e.target.value) || 0 })
+                      }
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="kr-inverse"
+                    checked={keyResultForm.inverse}
+                    onChange={(e) => setKeyResultForm({ ...keyResultForm, inverse: e.target.checked })}
+                  />
+                  <Label htmlFor="kr-inverse">Inverse (lower is better)</Label>
+                </div>
+              </>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setKeyResultDialogOpen(false)}>
