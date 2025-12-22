@@ -97,13 +97,16 @@ export class MeetingsService {
 
     const where: any = {
       companyId,
-      // Only show meetings where user is an attendee
-      attendees: {
+    };
+
+    // Owners can see all meetings, others only see meetings they're attending
+    if (member.role !== 'OWNER') {
+      where.attendees = {
         some: {
           memberId: member.id,
         },
-      },
-    };
+      };
+    }
 
     if (filters?.status) {
       where.status = filters.status;
@@ -284,13 +287,15 @@ export class MeetingsService {
     // Verify user is a member of the company
     const member = await this.verifyCompanyMember(meeting.companyId, userId);
 
-    // Verify user is an attendee of this meeting
-    const isAttendee = meeting.attendees.some(
-      (attendee) => attendee.memberId === member.id,
-    );
+    // Owners can access all meetings, others must be attendees
+    if (member.role !== 'OWNER') {
+      const isAttendee = meeting.attendees.some(
+        (attendee) => attendee.memberId === member.id,
+      );
 
-    if (!isAttendee) {
-      throw new ForbiddenException('Access denied: You are not an attendee of this meeting');
+      if (!isAttendee) {
+        throw new ForbiddenException('Access denied: You are not an attendee of this meeting');
+      }
     }
 
     return meeting;
