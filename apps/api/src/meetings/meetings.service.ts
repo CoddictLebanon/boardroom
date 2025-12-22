@@ -249,6 +249,22 @@ export class MeetingsService {
             createdAt: 'desc',
           },
         },
+        meetingNotes: {
+          include: {
+            createdBy: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                imageUrl: true,
+              },
+            },
+          },
+          orderBy: {
+            order: 'asc',
+          },
+        },
         summary: true,
       },
     });

@@ -290,6 +290,346 @@ function SortableNote({
   );
 }
 
+// Sortable agenda item component
+interface SortableAgendaItemProps {
+  item: any;
+  index: number;
+  isActive: boolean;
+}
+
+function SortableAgendaItem({ item, index, isActive }: SortableAgendaItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="flex gap-3 rounded-lg border p-3">
+      {isActive && (
+        <button
+          className="mt-0.5 cursor-grab touch-none text-muted-foreground hover:text-foreground"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+      )}
+      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-medium text-blue-600">
+        {index + 1}
+      </div>
+      <div className="flex-1">
+        <h4 className="font-medium">{item.title}</h4>
+        {item.description && (
+          <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
+        )}
+        <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
+          {item.duration && (
+            <span className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              {item.duration} min
+            </span>
+          )}
+          {item.createdBy && (
+            <span className="flex items-center gap-1">
+              <AvatarWithTooltip
+                imageUrl={item.createdBy.imageUrl}
+                firstName={item.createdBy.firstName}
+                lastName={item.createdBy.lastName}
+                size="xs"
+              />
+              Added by {item.createdBy.firstName}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Sortable decision component
+interface SortableDecisionProps {
+  decision: any;
+  isActive: boolean;
+  currentUser: any;
+  attendees: any[];
+  isCastingVote: boolean;
+  onCastVote: (decisionId: string, vote: VoteType) => void;
+  onFinalizeVote: (decisionId: string, outcome: "PASSED" | "REJECTED") => void;
+}
+
+function SortableDecision({
+  decision,
+  isActive,
+  currentUser,
+  attendees,
+  isCastingVote,
+  onCastVote,
+  onFinalizeVote,
+}: SortableDecisionProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: decision.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const votes = decision.votes || [];
+  const forVotes = votes.filter((v: { vote: string }) => v.vote === "FOR").length;
+  const againstVotes = votes.filter((v: { vote: string }) => v.vote === "AGAINST").length;
+  const abstainVotes = votes.filter((v: { vote: string }) => v.vote === "ABSTAIN").length;
+  const myVote = votes.find((v: { userId: string; vote: string }) => v.userId === currentUser?.id);
+  const isOpenForVoting = !decision.outcome;
+  const isCurrentUserAttendee = attendees.some((a) => a.member?.userId === currentUser?.id && a.isPresent);
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`rounded-lg border p-4 ${isOpenForVoting ? "border-purple-200 bg-purple-50/50" : ""}`}
+    >
+      {/* Decision Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-3 flex-1">
+          {isActive && (
+            <button
+              className="mt-0.5 cursor-grab touch-none text-muted-foreground hover:text-foreground"
+              {...attributes}
+              {...listeners}
+            >
+              <GripVertical className="h-4 w-4" />
+            </button>
+          )}
+          {decision.createdBy && (
+            <AvatarWithTooltip
+              imageUrl={decision.createdBy.imageUrl}
+              firstName={decision.createdBy.firstName}
+              lastName={decision.createdBy.lastName}
+              size="sm"
+            />
+          )}
+          <div>
+            <p className="font-medium">{decision.title}</p>
+            {decision.description && (
+              <p className="text-sm text-muted-foreground">{decision.description}</p>
+            )}
+          </div>
+        </div>
+        <Badge
+          variant={decision.outcome === "PASSED" ? "default" : "secondary"}
+          className={
+            decision.outcome === "PASSED" ? "bg-green-100 text-green-800" :
+            decision.outcome === "REJECTED" ? "bg-red-100 text-red-800" :
+            "bg-purple-100 text-purple-800"
+          }
+        >
+          {decision.outcome || "Open for Voting"}
+        </Badge>
+      </div>
+
+      {/* Voting Section */}
+      {isOpenForVoting && isActive && (
+        <div className="mt-4 space-y-3">
+          {/* Current User Vote Buttons */}
+          {isCurrentUserAttendee ? (
+            <div className="flex items-center justify-between rounded-lg border bg-white p-3">
+              <div className="flex items-center gap-2">
+                <User className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Your Vote:</span>
+                {myVote && (
+                  <Badge variant="outline" className={
+                    myVote.vote === "FOR" ? "border-green-500 text-green-700" :
+                    myVote.vote === "AGAINST" ? "border-red-500 text-red-700" :
+                    "border-gray-500 text-gray-700"
+                  }>
+                    {myVote.vote}
+                  </Badge>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant={myVote?.vote === "FOR" ? "default" : "outline"}
+                  className={myVote?.vote === "FOR" ? "bg-green-600 hover:bg-green-700" : ""}
+                  onClick={() => onCastVote(decision.id, "FOR")}
+                  disabled={isCastingVote}
+                >
+                  {isCastingVote ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                  <span className="ml-1">For</span>
+                </Button>
+                <Button
+                  size="sm"
+                  variant={myVote?.vote === "AGAINST" ? "default" : "outline"}
+                  className={myVote?.vote === "AGAINST" ? "bg-red-600 hover:bg-red-700" : ""}
+                  onClick={() => onCastVote(decision.id, "AGAINST")}
+                  disabled={isCastingVote}
+                >
+                  {isCastingVote ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+                  <span className="ml-1">Against</span>
+                </Button>
+                <Button
+                  size="sm"
+                  variant={myVote?.vote === "ABSTAIN" ? "default" : "outline"}
+                  className={myVote?.vote === "ABSTAIN" ? "bg-gray-600 hover:bg-gray-700" : ""}
+                  onClick={() => onCastVote(decision.id, "ABSTAIN")}
+                  disabled={isCastingVote}
+                >
+                  {isCastingVote ? <Loader2 className="h-4 w-4 animate-spin" /> : <MinusCircle className="h-4 w-4" />}
+                  <span className="ml-1">Abstain</span>
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-lg border bg-amber-50 p-3 text-sm text-amber-700">
+              You must be a present attendee to vote on this decision.
+            </div>
+          )}
+
+          {/* Vote Tally */}
+          <div className="flex items-center justify-between text-sm">
+            <div className="flex gap-4">
+              <span className="text-green-600 font-medium">For: {forVotes}</span>
+              <span className="text-red-600 font-medium">Against: {againstVotes}</span>
+              <span className="text-gray-600 font-medium">Abstain: {abstainVotes}</span>
+              <span className="text-muted-foreground">Total: {votes.length}</span>
+            </div>
+            {/* Close Voting Buttons */}
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => onFinalizeVote(decision.id, "REJECTED")}>
+                Close as Rejected
+              </Button>
+              <Button size="sm" onClick={() => onFinalizeVote(decision.id, "PASSED")}>
+                Close as Passed
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Final Vote Results for closed decisions */}
+      {decision.outcome && votes.length > 0 && (
+        <div className="mt-2 text-sm text-muted-foreground">
+          Final tally: For {forVotes} • Against {againstVotes} • Abstain {abstainVotes}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Sortable action item component
+interface SortableActionItemProps {
+  item: any;
+  isActive: boolean;
+  onEdit: (item: any) => void;
+  onDelete: (id: string) => void;
+}
+
+function SortableActionItem({ item, isActive, onEdit, onDelete }: SortableActionItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-start gap-3 rounded-lg border p-3">
+      {isActive && (
+        <button
+          className="mt-0.5 cursor-grab touch-none text-muted-foreground hover:text-foreground"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+      )}
+      <div className={`mt-0.5 h-2 w-2 rounded-full ${
+        item.status === "COMPLETED" ? "bg-green-500" :
+        item.status === "IN_PROGRESS" ? "bg-blue-500" :
+        "bg-gray-300"
+      }`} />
+      <div className="flex-1 min-w-0">
+        <p className={`font-medium ${item.status === "COMPLETED" ? "line-through text-muted-foreground" : ""}`}>
+          {item.title}
+        </p>
+        {item.description && (
+          <p className="text-sm text-muted-foreground line-clamp-2">{item.description}</p>
+        )}
+        <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+          {item.assignee && (
+            <span className="flex items-center gap-1">
+              <Avatar className="h-4 w-4">
+                <AvatarImage src={item.assignee.imageUrl} />
+                <AvatarFallback className="text-[8px]">
+                  {getInitials(item.assignee.firstName, item.assignee.lastName)}
+                </AvatarFallback>
+              </Avatar>
+              {item.assignee.firstName}
+            </span>
+          )}
+          {item.dueDate && (
+            <span>Due {format(new Date(item.dueDate), "MMM d")}</span>
+          )}
+          <Badge variant="outline" className={`text-[10px] px-1 py-0 ${
+            item.priority === "HIGH" ? "border-red-300 text-red-700" :
+            item.priority === "LOW" ? "border-gray-300 text-gray-600" :
+            "border-amber-300 text-amber-700"
+          }`}>
+            {item.priority}
+          </Badge>
+        </div>
+      </div>
+      {isActive && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => onEdit(item)}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="text-destructive"
+              onClick={() => onDelete(item.id)}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
+  );
+}
+
 export default function LiveMeetingPage({
   params,
 }: {
@@ -359,6 +699,9 @@ export default function LiveMeetingPage({
 
   // Attendance state
   const [attendanceUpdating, setAttendanceUpdating] = useState<string | null>(null);
+  const [attendeeDialogOpen, setAttendeeDialogOpen] = useState(false);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [isAddingAttendees, setIsAddingAttendees] = useState(false);
 
   // Action item state
   const [actionDialogOpen, setActionDialogOpen] = useState(false);
@@ -577,7 +920,7 @@ export default function LiveMeetingPage({
   }, [onActionItemCreated, onActionItemUpdated, onActionItemDeleted, onActionItemReordered]);
 
   // Handle drag end for note reordering
-  const handleDragEnd = useCallback(
+  const handleNotesDragEnd = useCallback(
     async (event: DragEndEvent) => {
       const { active, over } = event;
 
@@ -618,6 +961,123 @@ export default function LiveMeetingPage({
       }
     },
     [notes, companyId, id, getToken]
+  );
+
+  const handleAgendaDragEnd = useCallback(
+    async (event: DragEndEvent) => {
+      const { active, over } = event;
+
+      if (!over || active.id === over.id) return;
+
+      const oldIndex = agendaItems.findIndex((a) => a.id === active.id);
+      const newIndex = agendaItems.findIndex((a) => a.id === over.id);
+
+      if (oldIndex === -1 || newIndex === -1) return;
+
+      const newItems = arrayMove(agendaItems, oldIndex, newIndex);
+      setAgendaItems(newItems);
+
+      try {
+        const token = await getToken();
+        const response = await fetch(
+          `${API_URL}/companies/${companyId}/meetings/${id}/agenda/reorder`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ itemIds: newItems.map((a) => a.id) }),
+          }
+        );
+        if (!response.ok) {
+          setAgendaItems((prev) => arrayMove(prev, newIndex, oldIndex));
+          console.error("Failed to reorder agenda items");
+        }
+      } catch (error) {
+        setAgendaItems((prev) => arrayMove(prev, newIndex, oldIndex));
+        console.error("Error reordering agenda items:", error);
+      }
+    },
+    [agendaItems, companyId, id, getToken]
+  );
+
+  const handleDecisionsDragEnd = useCallback(
+    async (event: DragEndEvent) => {
+      const { active, over } = event;
+
+      if (!over || active.id === over.id) return;
+
+      const oldIndex = decisions.findIndex((d) => d.id === active.id);
+      const newIndex = decisions.findIndex((d) => d.id === over.id);
+
+      if (oldIndex === -1 || newIndex === -1) return;
+
+      const newItems = arrayMove(decisions, oldIndex, newIndex);
+      setDecisions(newItems);
+
+      try {
+        const token = await getToken();
+        const response = await fetch(
+          `${API_URL}/companies/${companyId}/meetings/${id}/decisions/reorder`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ decisionIds: newItems.map((d) => d.id) }),
+          }
+        );
+        if (!response.ok) {
+          setDecisions((prev) => arrayMove(prev, newIndex, oldIndex));
+          console.error("Failed to reorder decisions");
+        }
+      } catch (error) {
+        setDecisions((prev) => arrayMove(prev, newIndex, oldIndex));
+        console.error("Error reordering decisions:", error);
+      }
+    },
+    [decisions, companyId, id, getToken]
+  );
+
+  const handleActionItemsDragEnd = useCallback(
+    async (event: DragEndEvent) => {
+      const { active, over } = event;
+
+      if (!over || active.id === over.id) return;
+
+      const oldIndex = actionItems.findIndex((a) => a.id === active.id);
+      const newIndex = actionItems.findIndex((a) => a.id === over.id);
+
+      if (oldIndex === -1 || newIndex === -1) return;
+
+      const newItems = arrayMove(actionItems, oldIndex, newIndex);
+      setActionItems(newItems);
+
+      try {
+        const token = await getToken();
+        const response = await fetch(
+          `${API_URL}/companies/${companyId}/meetings/${id}/action-items/reorder`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ itemIds: newItems.map((a) => a.id) }),
+          }
+        );
+        if (!response.ok) {
+          setActionItems((prev) => arrayMove(prev, newIndex, oldIndex));
+          console.error("Failed to reorder action items");
+        }
+      } catch (error) {
+        setActionItems((prev) => arrayMove(prev, newIndex, oldIndex));
+        console.error("Error reordering action items:", error);
+      }
+    },
+    [actionItems, companyId, id, getToken]
   );
 
   const handleStartMeeting = async () => {
@@ -713,6 +1173,31 @@ export default function LiveMeetingPage({
       console.error("Error updating attendance:", error);
     } finally {
       setAttendanceUpdating(null);
+    }
+  };
+
+  const handleAddAttendees = async () => {
+    if (selectedMemberIds.length === 0) return;
+    try {
+      setIsAddingAttendees(true);
+      const token = await getToken();
+      const response = await fetch(`${API_URL}/companies/${companyId}/meetings/${id}/attendees`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ memberIds: selectedMemberIds }),
+      });
+      if (!response.ok) throw new Error("Failed to add attendees");
+      await refetch();
+      setAttendeeDialogOpen(false);
+      setSelectedMemberIds([]);
+    } catch (error) {
+      console.error("Error adding attendees:", error);
+      alert("Failed to add attendees. Please try again.");
+    } finally {
+      setIsAddingAttendees(false);
     }
   };
 
@@ -1127,6 +1612,12 @@ export default function LiveMeetingPage({
                 </CardDescription>
               </div>
             </div>
+            {isActive && (
+              <Button size="sm" onClick={() => setAttendeeDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Attendee
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -1205,40 +1696,27 @@ export default function LiveMeetingPage({
           </CardHeader>
           <CardContent>
             {agendaItems.length > 0 ? (
-              <div className="space-y-3">
-                {agendaItems.map((item, index) => (
-                  <div key={item.id} className="flex gap-3 rounded-lg border p-3">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-medium text-blue-600">
-                      {index + 1}
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-medium">{item.title}</h4>
-                      {item.description && (
-                        <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
-                      )}
-                      <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
-                        {item.duration && (
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {item.duration} min
-                          </span>
-                        )}
-                        {item.createdBy && (
-                          <span className="flex items-center gap-1">
-                            <AvatarWithTooltip
-                              imageUrl={item.createdBy.imageUrl}
-                              firstName={item.createdBy.firstName}
-                              lastName={item.createdBy.lastName}
-                              size="xs"
-                            />
-                            Added by {item.createdBy.firstName}
-                          </span>
-                        )}
-                      </div>
-                    </div>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleAgendaDragEnd}
+              >
+                <SortableContext
+                  items={agendaItems.map((a) => a.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-3">
+                    {agendaItems.map((item, index) => (
+                      <SortableAgendaItem
+                        key={item.id}
+                        item={item}
+                        index={index}
+                        isActive={isActive}
+                      />
+                    ))}
                   </div>
-                ))}
-              </div>
+                </SortableContext>
+              </DndContext>
             ) : (
               <div className="py-8 text-center">
                 <FileText className="mx-auto h-8 w-8 text-muted-foreground/50" />
@@ -1277,137 +1755,31 @@ export default function LiveMeetingPage({
           </CardHeader>
           <CardContent>
             {decisions.length > 0 ? (
-              <div className="space-y-4">
-                {decisions.map((decision) => {
-                  const votes = decision.votes || [];
-                  const forVotes = votes.filter((v: { vote: string }) => v.vote === "FOR").length;
-                  const againstVotes = votes.filter((v: { vote: string }) => v.vote === "AGAINST").length;
-                  const abstainVotes = votes.filter((v: { vote: string }) => v.vote === "ABSTAIN").length;
-                  const myVote = votes.find((v: { userId: string; vote: string }) => v.userId === currentUser?.id);
-                  const isOpenForVoting = !decision.outcome;
-                  const isCurrentUserAttendee = attendees.some((a) => a.member?.userId === currentUser?.id && a.isPresent);
-
-                  return (
-                    <div key={decision.id} className={`rounded-lg border p-4 ${isOpenForVoting ? "border-purple-200 bg-purple-50/50" : ""}`}>
-                      {/* Decision Header */}
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-start gap-3 flex-1">
-                          {decision.createdBy && (
-                            <AvatarWithTooltip
-                              imageUrl={decision.createdBy.imageUrl}
-                              firstName={decision.createdBy.firstName}
-                              lastName={decision.createdBy.lastName}
-                              size="sm"
-                            />
-                          )}
-                          <div>
-                            <p className="font-medium">{decision.title}</p>
-                            {decision.description && (
-                              <p className="text-sm text-muted-foreground">{decision.description}</p>
-                            )}
-                          </div>
-                        </div>
-                        <Badge
-                          variant={decision.outcome === "PASSED" ? "default" : "secondary"}
-                          className={
-                            decision.outcome === "PASSED" ? "bg-green-100 text-green-800" :
-                            decision.outcome === "REJECTED" ? "bg-red-100 text-red-800" :
-                            "bg-purple-100 text-purple-800"
-                          }
-                        >
-                          {decision.outcome || "Open for Voting"}
-                        </Badge>
-                      </div>
-
-                      {/* Voting Section */}
-                      {isOpenForVoting && isActive && (
-                        <div className="mt-4 space-y-3">
-                          {/* Current User Vote Buttons */}
-                          {isCurrentUserAttendee ? (
-                            <div className="flex items-center justify-between rounded-lg border bg-white p-3">
-                              <div className="flex items-center gap-2">
-                                <User className="h-4 w-4 text-muted-foreground" />
-                                <span className="text-sm font-medium">Your Vote:</span>
-                                {myVote && (
-                                  <Badge variant="outline" className={
-                                    myVote.vote === "FOR" ? "border-green-500 text-green-700" :
-                                    myVote.vote === "AGAINST" ? "border-red-500 text-red-700" :
-                                    "border-gray-500 text-gray-700"
-                                  }>
-                                    {myVote.vote}
-                                  </Badge>
-                                )}
-                              </div>
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  variant={myVote?.vote === "FOR" ? "default" : "outline"}
-                                  className={myVote?.vote === "FOR" ? "bg-green-600 hover:bg-green-700" : ""}
-                                  onClick={() => handleCastVote(decision.id, "FOR")}
-                                  disabled={isCastingVote}
-                                >
-                                  {isCastingVote ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                                  <span className="ml-1">For</span>
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant={myVote?.vote === "AGAINST" ? "default" : "outline"}
-                                  className={myVote?.vote === "AGAINST" ? "bg-red-600 hover:bg-red-700" : ""}
-                                  onClick={() => handleCastVote(decision.id, "AGAINST")}
-                                  disabled={isCastingVote}
-                                >
-                                  {isCastingVote ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
-                                  <span className="ml-1">Against</span>
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant={myVote?.vote === "ABSTAIN" ? "default" : "outline"}
-                                  className={myVote?.vote === "ABSTAIN" ? "bg-gray-600 hover:bg-gray-700" : ""}
-                                  onClick={() => handleCastVote(decision.id, "ABSTAIN")}
-                                  disabled={isCastingVote}
-                                >
-                                  {isCastingVote ? <Loader2 className="h-4 w-4 animate-spin" /> : <MinusCircle className="h-4 w-4" />}
-                                  <span className="ml-1">Abstain</span>
-                                </Button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="rounded-lg border bg-amber-50 p-3 text-sm text-amber-700">
-                              You must be a present attendee to vote on this decision.
-                            </div>
-                          )}
-
-                          {/* Vote Tally */}
-                          <div className="flex items-center justify-between text-sm">
-                            <div className="flex gap-4">
-                              <span className="text-green-600 font-medium">For: {forVotes}</span>
-                              <span className="text-red-600 font-medium">Against: {againstVotes}</span>
-                              <span className="text-gray-600 font-medium">Abstain: {abstainVotes}</span>
-                              <span className="text-muted-foreground">Total: {votes.length}</span>
-                            </div>
-                            {/* Close Voting Buttons */}
-                            <div className="flex gap-2">
-                              <Button size="sm" variant="outline" onClick={() => handleFinalizeVote(decision.id, "REJECTED")}>
-                                Close as Rejected
-                              </Button>
-                              <Button size="sm" onClick={() => handleFinalizeVote(decision.id, "PASSED")}>
-                                Close as Passed
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Final Vote Results for closed decisions */}
-                      {decision.outcome && votes.length > 0 && (
-                        <div className="mt-2 text-sm text-muted-foreground">
-                          Final tally: For {forVotes} • Against {againstVotes} • Abstain {abstainVotes}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDecisionsDragEnd}
+              >
+                <SortableContext
+                  items={decisions.map((d) => d.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-4">
+                    {decisions.map((decision) => (
+                      <SortableDecision
+                        key={decision.id}
+                        decision={decision}
+                        isActive={isActive}
+                        currentUser={currentUser}
+                        attendees={attendees}
+                        isCastingVote={isCastingVote}
+                        onCastVote={handleCastVote}
+                        onFinalizeVote={handleFinalizeVote}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
             ) : (
               <div className="py-8 text-center">
                 <Vote className="mx-auto h-8 w-8 text-muted-foreground/50" />
@@ -1446,79 +1818,37 @@ export default function LiveMeetingPage({
           </CardHeader>
           <CardContent>
             {actionItems.length > 0 ? (
-              <div className="space-y-3">
-                {actionItems.map((item: any) => (
-                  <div key={item.id} className="flex items-start gap-3 rounded-lg border p-3">
-                    <div className={`mt-0.5 h-2 w-2 rounded-full ${
-                      item.status === "COMPLETED" ? "bg-green-500" :
-                      item.status === "IN_PROGRESS" ? "bg-blue-500" :
-                      "bg-gray-300"
-                    }`} />
-                    <div className="flex-1 min-w-0">
-                      <p className={`font-medium ${item.status === "COMPLETED" ? "line-through text-muted-foreground" : ""}`}>
-                        {item.title}
-                      </p>
-                      {item.description && (
-                        <p className="text-sm text-muted-foreground line-clamp-2">{item.description}</p>
-                      )}
-                      <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-                        {item.assignee && (
-                          <span className="flex items-center gap-1">
-                            <Avatar className="h-4 w-4">
-                              <AvatarImage src={item.assignee.imageUrl} />
-                              <AvatarFallback className="text-[8px]">
-                                {getInitials(item.assignee.firstName, item.assignee.lastName)}
-                              </AvatarFallback>
-                            </Avatar>
-                            {item.assignee.firstName}
-                          </span>
-                        )}
-                        {item.dueDate && (
-                          <span>Due {format(new Date(item.dueDate), "MMM d")}</span>
-                        )}
-                        <Badge variant="outline" className={`text-[10px] px-1 py-0 ${
-                          item.priority === "HIGH" ? "border-red-300 text-red-700" :
-                          item.priority === "LOW" ? "border-gray-300 text-gray-600" :
-                          "border-amber-300 text-amber-700"
-                        }`}>
-                          {item.priority}
-                        </Badge>
-                      </div>
-                    </div>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleActionItemsDragEnd}
+              >
+                <SortableContext
+                  items={actionItems.map((a) => a.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-3">
+                    {actionItems.map((item: any) => (
+                      <SortableActionItem
+                        key={item.id}
+                        item={item}
+                        isActive={isActive}
+                        onEdit={handleOpenEditAction}
+                        onDelete={(id) => {
+                          setDeletingActionId(id);
+                          setShowDeleteActionConfirm(true);
+                        }}
+                      />
+                    ))}
                     {isActive && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleOpenEditAction(item)}>
-                            <Pencil className="mr-2 h-4 w-4" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="text-destructive"
-                            onClick={() => {
-                              setDeletingActionId(item.id);
-                              setShowDeleteActionConfirm(true);
-                            }}
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <Button size="sm" variant="outline" className="w-full" onClick={() => setActionDialogOpen(true)}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add Action Item
+                      </Button>
                     )}
                   </div>
-                ))}
-                {isActive && (
-                  <Button size="sm" variant="outline" className="w-full" onClick={() => setActionDialogOpen(true)}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Action Item
-                  </Button>
-                )}
-              </div>
+                </SortableContext>
+              </DndContext>
             ) : (
               <div className="py-8 text-center">
                 <CheckSquare className="mx-auto h-8 w-8 text-muted-foreground/50" />
@@ -1574,7 +1904,7 @@ export default function LiveMeetingPage({
               <DndContext
                 sensors={sensors}
                 collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
+                onDragEnd={handleNotesDragEnd}
               >
                 <SortableContext
                   items={notes.map((n) => n.id)}
@@ -1883,6 +2213,72 @@ export default function LiveMeetingPage({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Add Attendee Dialog */}
+      <Dialog open={attendeeDialogOpen} onOpenChange={(open) => {
+        setAttendeeDialogOpen(open);
+        if (!open) setSelectedMemberIds([]);
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Attendees</DialogTitle>
+            <DialogDescription>Select company members to add to this meeting.</DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="space-y-3 max-h-[300px] overflow-y-auto">
+              {companyMembers
+                .filter((member) => !attendees.some((a) => a.member?.id === member.id))
+                .map((member) => (
+                  <div
+                    key={member.id}
+                    className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-muted/50 ${
+                      selectedMemberIds.includes(member.id) ? "border-primary bg-primary/5" : ""
+                    }`}
+                    onClick={() => {
+                      setSelectedMemberIds((prev) =>
+                        prev.includes(member.id)
+                          ? prev.filter((id) => id !== member.id)
+                          : [...prev, member.id]
+                      );
+                    }}
+                  >
+                    <Avatar>
+                      <AvatarImage src={member.user?.imageUrl || undefined} />
+                      <AvatarFallback>
+                        {getInitials(member.user?.firstName, member.user?.lastName)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">
+                        {member.user?.firstName} {member.user?.lastName}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {member.title || member.role}
+                      </p>
+                    </div>
+                    {selectedMemberIds.includes(member.id) && (
+                      <CheckCircle2 className="h-5 w-5 text-primary" />
+                    )}
+                  </div>
+                ))}
+              {companyMembers.filter((member) => !attendees.some((a) => a.member?.id === member.id)).length === 0 && (
+                <div className="py-4 text-center text-sm text-muted-foreground">
+                  All company members are already attendees
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAttendeeDialogOpen(false)} disabled={isAddingAttendees}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddAttendees} disabled={isAddingAttendees || selectedMemberIds.length === 0}>
+              {isAddingAttendees && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Add {selectedMemberIds.length > 0 ? `(${selectedMemberIds.length})` : ""}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
     </TooltipProvider>
   );

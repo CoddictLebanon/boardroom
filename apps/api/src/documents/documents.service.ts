@@ -53,6 +53,11 @@ export class DocumentsService {
       include: {
         parent: true,
         children: true,
+        _count: {
+          select: {
+            documents: true,
+          },
+        },
       },
     });
   }
