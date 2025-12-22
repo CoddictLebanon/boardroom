@@ -34,7 +34,11 @@ export class MeetingsService {
 
   async createMeeting(companyId: string, userId: string, dto: CreateMeetingDto) {
     // Verify user is a member of the company
-    await this.verifyCompanyMember(companyId, userId);
+    const creatorMember = await this.verifyCompanyMember(companyId, userId);
+
+    // Build attendee list - always include the creator
+    const attendeeIds = new Set(dto.attendeeIds || []);
+    attendeeIds.add(creatorMember.id); // Ensure creator is an attendee
 
     const meeting = await this.prisma.meeting.create({
       data: {
@@ -46,13 +50,11 @@ export class MeetingsService {
         location: dto.location,
         videoLink: dto.videoLink,
         status: MeetingStatus.SCHEDULED,
-        ...(dto.attendeeIds && {
-          attendees: {
-            create: dto.attendeeIds.map((memberId) => ({
-              memberId,
-            })),
-          },
-        }),
+        attendees: {
+          create: Array.from(attendeeIds).map((memberId) => ({
+            memberId,
+          })),
+        },
         ...(dto.agendaItems && {
           agendaItems: {
             create: dto.agendaItems.map((item, index) => ({
@@ -91,10 +93,16 @@ export class MeetingsService {
     filters?: { status?: MeetingStatus; upcoming?: boolean; past?: boolean },
   ) {
     // Verify user is a member of the company
-    await this.verifyCompanyMember(companyId, userId);
+    const member = await this.verifyCompanyMember(companyId, userId);
 
     const where: any = {
       companyId,
+      // Only show meetings where user is an attendee
+      attendees: {
+        some: {
+          memberId: member.id,
+        },
+      },
     };
 
     if (filters?.status) {
@@ -274,7 +282,16 @@ export class MeetingsService {
     }
 
     // Verify user is a member of the company
-    await this.verifyCompanyMember(meeting.companyId, userId);
+    const member = await this.verifyCompanyMember(meeting.companyId, userId);
+
+    // Verify user is an attendee of this meeting
+    const isAttendee = meeting.attendees.some(
+      (attendee) => attendee.memberId === member.id,
+    );
+
+    if (!isAttendee) {
+      throw new ForbiddenException('Access denied: You are not an attendee of this meeting');
+    }
 
     return meeting;
   }
