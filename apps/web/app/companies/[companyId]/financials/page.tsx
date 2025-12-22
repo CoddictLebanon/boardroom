@@ -23,6 +23,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { DollarSign, TrendingUp, Upload, Download, Trash2, FileText, Loader2 } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import { useParams } from "next/navigation";
+import { usePermission } from "@/lib/permissions";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
 
@@ -57,6 +58,9 @@ export default function FinancialsPage() {
   const { getToken } = useAuth();
   const params = useParams();
   const companyId = params.companyId as string;
+
+  const canEdit = usePermission("financials.edit");
+  const canManagePdfs = usePermission("financials.manage_pdfs");
 
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
@@ -416,10 +420,12 @@ export default function FinancialsPage() {
                   <TableRow key={data.month}>
                     <TableCell className="font-medium">{MONTHS[data.month - 1]}</TableCell>
                     <TableCell
-                      className="cursor-pointer hover:bg-muted/50"
+                      className={canEdit ? "cursor-pointer hover:bg-muted/50" : ""}
                       onClick={() => {
-                        setEditingCell({ month: data.month, field: "revenue" });
-                        setEditValue(String(data.revenue || ""));
+                        if (canEdit) {
+                          setEditingCell({ month: data.month, field: "revenue" });
+                          setEditValue(String(data.revenue || ""));
+                        }
                       }}
                     >
                       {editingCell?.month === data.month && editingCell?.field === "revenue" ? (
@@ -440,10 +446,12 @@ export default function FinancialsPage() {
                       )}
                     </TableCell>
                     <TableCell
-                      className="cursor-pointer hover:bg-muted/50"
+                      className={canEdit ? "cursor-pointer hover:bg-muted/50" : ""}
                       onClick={() => {
-                        setEditingCell({ month: data.month, field: "cost" });
-                        setEditValue(String(data.cost || ""));
+                        if (canEdit) {
+                          setEditingCell({ month: data.month, field: "cost" });
+                          setEditValue(String(data.cost || ""));
+                        }
                       }}
                     >
                       {editingCell?.month === data.month && editingCell?.field === "cost" ? (
@@ -477,35 +485,39 @@ export default function FinancialsPage() {
                             >
                               <Download className="h-4 w-4" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handlePdfDelete(data.month)}
-                            >
-                              <Trash2 className="h-4 w-4 text-red-500" />
-                            </Button>
+                            {canManagePdfs && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handlePdfDelete(data.month)}
+                              >
+                                <Trash2 className="h-4 w-4 text-red-500" />
+                              </Button>
+                            )}
                           </>
                         ) : (
-                          <label className="cursor-pointer">
-                            <input
-                              type="file"
-                              accept=".pdf"
-                              className="hidden"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) handlePdfUpload(data.month, file);
-                              }}
-                            />
-                            <Button variant="ghost" size="sm" asChild disabled={uploadingMonth === data.month}>
-                              <span>
-                                {uploadingMonth === data.month ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Upload className="h-4 w-4" />
-                                )}
-                              </span>
-                            </Button>
-                          </label>
+                          canManagePdfs && (
+                            <label className="cursor-pointer">
+                              <input
+                                type="file"
+                                accept=".pdf"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handlePdfUpload(data.month, file);
+                                }}
+                              />
+                              <Button variant="ghost" size="sm" asChild disabled={uploadingMonth === data.month}>
+                                <span>
+                                  {uploadingMonth === data.month ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Upload className="h-4 w-4" />
+                                  )}
+                                </span>
+                              </Button>
+                            </label>
+                          )
                         )}
                       </div>
                     </TableCell>

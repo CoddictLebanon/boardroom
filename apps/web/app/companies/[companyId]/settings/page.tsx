@@ -12,10 +12,42 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Building2, Globe, Calendar, Bell, Link2, CreditCard } from "lucide-react";
+import { Building2, Globe, Calendar, Bell, Link2, CreditCard, Shield, ChevronRight } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { useAuth, useUser } from "@clerk/nextjs";
+import { useState, useEffect } from "react";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
 
 export default function SettingsPage() {
-  // Company data is available via layout context, settings page doesn't need it for now
+  const params = useParams();
+  const router = useRouter();
+  const { getToken } = useAuth();
+  const { user } = useUser();
+  const companyId = params.companyId as string;
+  const [isOwner, setIsOwner] = useState(false);
+
+  useEffect(() => {
+    const checkOwnership = async () => {
+      if (!user) return;
+      try {
+        const token = await getToken();
+        const res = await fetch(`${API_URL}/companies/${companyId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const company = await res.json();
+          const membership = company.members?.find(
+            (m: any) => m.user.email === user.primaryEmailAddress?.emailAddress
+          );
+          setIsOwner(membership?.role === "OWNER");
+        }
+      } catch (error) {
+        console.error("Error checking ownership:", error);
+      }
+    };
+    checkOwnership();
+  }, [companyId, getToken, user]);
 
   return (
     <div className="space-y-6">
@@ -26,6 +58,29 @@ export default function SettingsPage() {
           Manage your company and account settings
         </p>
       </div>
+
+      {/* Role Permissions - Owner Only */}
+      {isOwner && (
+        <Card
+          className="cursor-pointer transition-colors hover:bg-muted/50"
+          onClick={() => router.push(`/companies/${companyId}/settings/permissions`)}
+        >
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="rounded-lg bg-indigo-100 p-2">
+                  <Shield className="h-5 w-5 text-indigo-600" />
+                </div>
+                <div>
+                  <CardTitle>Role Permissions</CardTitle>
+                  <CardDescription>Configure what each role can do in your company</CardDescription>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 text-muted-foreground" />
+            </div>
+          </CardHeader>
+        </Card>
+      )}
 
       {/* Company Profile */}
       <Card>

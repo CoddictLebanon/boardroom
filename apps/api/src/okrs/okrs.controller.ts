@@ -107,30 +107,37 @@ export class OkrsController {
   // Objectives
   // ==========================================
 
-  @Post('okr-periods/:periodId/objectives')
+  @Post('companies/:companyId/okr-periods/:periodId/objectives')
   @RequirePermission('okrs.create')
   @ApiOperation({ summary: 'Create a new objective' })
   createObjective(
+    @Param('companyId') companyId: string,
     @Param('periodId') periodId: string,
     @Body() dto: CreateObjectiveDto,
   ) {
     return this.okrsService.createObjective(periodId, dto);
   }
 
-  @Patch('objectives/:id')
+  @Patch('companies/:companyId/okr-periods/:periodId/objectives/:id')
   @RequirePermission('okrs.edit')
   @ApiOperation({ summary: 'Update an objective' })
   updateObjective(
+    @Param('companyId') companyId: string,
+    @Param('periodId') periodId: string,
     @Param('id') id: string,
     @Body() dto: UpdateObjectiveDto,
   ) {
     return this.okrsService.updateObjective(id, dto);
   }
 
-  @Delete('objectives/:id')
+  @Delete('companies/:companyId/okr-periods/:periodId/objectives/:id')
   @RequirePermission('okrs.delete')
   @ApiOperation({ summary: 'Delete an objective' })
-  deleteObjective(@Param('id') id: string) {
+  deleteObjective(
+    @Param('companyId') companyId: string,
+    @Param('periodId') periodId: string,
+    @Param('id') id: string,
+  ) {
     return this.okrsService.deleteObjective(id);
   }
 
@@ -138,30 +145,40 @@ export class OkrsController {
   // Key Results
   // ==========================================
 
-  @Post('objectives/:objectiveId/key-results')
+  @Post('companies/:companyId/okr-periods/:periodId/objectives/:objectiveId/key-results')
   @RequirePermission('okrs.create')
   @ApiOperation({ summary: 'Create a new key result' })
   createKeyResult(
+    @Param('companyId') companyId: string,
+    @Param('periodId') periodId: string,
     @Param('objectiveId') objectiveId: string,
     @Body() dto: CreateKeyResultDto,
   ) {
     return this.okrsService.createKeyResult(objectiveId, dto);
   }
 
-  @Patch('key-results/:id')
+  @Patch('companies/:companyId/okr-periods/:periodId/objectives/:objectiveId/key-results/:id')
   @RequirePermission('okrs.edit')
   @ApiOperation({ summary: 'Update a key result' })
   updateKeyResult(
+    @Param('companyId') companyId: string,
+    @Param('periodId') periodId: string,
+    @Param('objectiveId') objectiveId: string,
     @Param('id') id: string,
     @Body() dto: UpdateKeyResultDto,
   ) {
     return this.okrsService.updateKeyResult(id, dto);
   }
 
-  @Delete('key-results/:id')
+  @Delete('companies/:companyId/okr-periods/:periodId/objectives/:objectiveId/key-results/:id')
   @RequirePermission('okrs.delete')
   @ApiOperation({ summary: 'Delete a key result' })
-  deleteKeyResult(@Param('id') id: string) {
+  deleteKeyResult(
+    @Param('companyId') companyId: string,
+    @Param('periodId') periodId: string,
+    @Param('objectiveId') objectiveId: string,
+    @Param('id') id: string,
+  ) {
     return this.okrsService.deleteKeyResult(id);
   }
 }

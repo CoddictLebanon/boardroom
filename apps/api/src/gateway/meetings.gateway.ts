@@ -243,6 +243,18 @@ export class MeetingsGateway
       throw new WsException('Voting is only allowed during live meetings');
     }
 
+    // Verify user is a present attendee
+    const attendee = await this.prisma.meetingAttendee.findFirst({
+      where: {
+        meetingId: decision.meetingId,
+        member: { userId: client.userId },
+        isPresent: true,
+      },
+    });
+    if (!attendee) {
+      throw new WsException('Only present attendees can vote');
+    }
+
     // The User.id IS the Clerk user ID in our schema
     // Upsert the vote using the Clerk userId directly
     const voteRecord = await this.prisma.vote.upsert({

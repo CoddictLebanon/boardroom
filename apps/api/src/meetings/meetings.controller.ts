@@ -173,16 +173,39 @@ export class MeetingsController {
     return this.meetingsService.castVote(id, decisionId, userId, castVoteDto);
   }
 
+  // Reorder must come before :decisionId routes to match correctly
+  @Put('companies/:companyId/meetings/:id/decisions/reorder')
+  @RequirePermission('meetings.edit')
+  async reorderDecisions(
+    @Param('companyId') companyId: string,
+    @Param('id') id: string,
+    @Body() body: { decisionIds: string[] },
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.meetingsService.reorderDecisions(id, body.decisionIds, userId);
+  }
+
   @Put('companies/:companyId/meetings/:id/decisions/:decisionId')
   @RequirePermission('meetings.edit')
   async updateDecision(
     @Param('companyId') companyId: string,
     @Param('id') id: string,
     @Param('decisionId') decisionId: string,
-    @Body() updateDecisionDto: { outcome: 'PASSED' | 'REJECTED' | 'TABLED' },
+    @Body() updateDecisionDto: { outcome?: 'PASSED' | 'REJECTED' | 'TABLED'; title?: string; description?: string },
     @CurrentUser('userId') userId: string,
   ) {
     return this.meetingsService.updateDecision(id, decisionId, userId, updateDecisionDto);
+  }
+
+  @Delete('companies/:companyId/meetings/:id/decisions/:decisionId')
+  @RequirePermission('meetings.edit')
+  async deleteDecision(
+    @Param('companyId') companyId: string,
+    @Param('id') id: string,
+    @Param('decisionId') decisionId: string,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.meetingsService.deleteDecision(id, decisionId, userId);
   }
 
   @Post('companies/:companyId/meetings/:id/start')

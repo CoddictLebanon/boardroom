@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@clerk/nextjs";
-import { UserButton } from "@clerk/nextjs";
+import { useAuth, useClerk, UserButton } from "@clerk/nextjs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Building2 } from "lucide-react";
+import { Loader2, Building2, LogOut } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
 
@@ -20,6 +19,7 @@ interface Company {
 export default function CompanyPickerPage() {
   const router = useRouter();
   const { getToken } = useAuth();
+  const { signOut } = useClerk();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -74,13 +74,24 @@ export default function CompanyPickerPage() {
             Contact an administrator to receive an invitation.
           </p>
         </div>
-        <UserButton afterSignOutUrl="/sign-in" />
+        <Button
+          variant="outline"
+          onClick={() => signOut({ redirectUrl: '/sign-in' })}
+        >
+          <LogOut className="mr-2 h-4 w-4" />
+          Sign Out
+        </Button>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-8 p-4">
+    <div className="relative flex min-h-screen flex-col items-center justify-center gap-8 p-4">
+      {/* User menu in top-right corner */}
+      <div className="absolute top-4 right-4">
+        <UserButton afterSignOutUrl="/sign-in" />
+      </div>
+
       <div className="text-center">
         <h1 className="text-2xl font-bold">Select a Company</h1>
         <p className="mt-2 text-muted-foreground">Choose which company to continue with</p>
@@ -111,8 +122,6 @@ export default function CompanyPickerPage() {
           </Card>
         ))}
       </div>
-
-      <UserButton afterSignOutUrl="/sign-in" />
     </div>
   );
 }

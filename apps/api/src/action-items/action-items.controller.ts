@@ -102,4 +102,15 @@ export class ActionItemsController {
   ) {
     return this.actionItemsService.remove(id, userId);
   }
+
+  @Put('companies/:companyId/meetings/:meetingId/action-items/reorder')
+  @RequirePermission('action_items.edit')
+  reorder(
+    @Param('companyId') companyId: string,
+    @Param('meetingId') meetingId: string,
+    @Body() body: { itemIds: string[] },
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.actionItemsService.reorder(meetingId, body.itemIds, userId);
+  }
 }

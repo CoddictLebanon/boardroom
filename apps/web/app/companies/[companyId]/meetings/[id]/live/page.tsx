@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useEffect } from "react";
+import { use, useState, useEffect, useCallback } from "react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,6 +43,12 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   ArrowLeft,
   Calendar,
   Clock,
@@ -61,11 +67,39 @@ import {
   Timer,
   StickyNote,
   User,
+  Pencil,
+  Trash2,
+  MoreHorizontal,
+  GripVertical,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { useMeeting } from "@/lib/hooks/use-meetings";
+import {
+  useMeetingSocket,
+  MeetingNote,
+  AgendaItem as AgendaItemType,
+  Decision as DecisionType,
+  ActionItem as ActionItemType,
+} from "@/lib/socket/use-meeting-socket";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
 
@@ -133,6 +167,129 @@ function AvatarWithTooltip({
   );
 }
 
+// Sortable note item for drag-and-drop
+interface SortableNoteProps {
+  note: MeetingNote;
+  isActive: boolean;
+  isOwner: boolean;
+  editingNoteId: string | null;
+  editingNoteContent: string;
+  setEditingNoteContent: (content: string) => void;
+  onEdit: (note: MeetingNote) => void;
+  onCancelEdit: () => void;
+  onSave: () => void;
+  onDelete: (noteId: string) => void;
+}
+
+function SortableNote({
+  note,
+  isActive,
+  isOwner,
+  editingNoteId,
+  editingNoteContent,
+  setEditingNoteContent,
+  onEdit,
+  onCancelEdit,
+  onSave,
+  onDelete,
+}: SortableNoteProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: note.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="rounded-lg border p-3 bg-background"
+    >
+      {editingNoteId === note.id ? (
+        <div className="space-y-2">
+          <Textarea
+            value={editingNoteContent}
+            onChange={(e) => setEditingNoteContent(e.target.value)}
+            className="min-h-[80px]"
+            autoFocus
+          />
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="outline" onClick={onCancelEdit}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={onSave} disabled={!editingNoteContent.trim()}>
+              Save
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-start justify-between gap-3">
+            {isActive && (
+              <button
+                className="mt-1 cursor-grab touch-none text-muted-foreground hover:text-foreground"
+                {...attributes}
+                {...listeners}
+              >
+                <GripVertical className="h-4 w-4" />
+              </button>
+            )}
+            <div className="flex items-start gap-3 flex-1">
+              <AvatarWithTooltip
+                imageUrl={note.createdBy?.imageUrl}
+                firstName={note.createdBy?.firstName}
+                lastName={note.createdBy?.lastName}
+                size="sm"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm whitespace-pre-wrap">{note.content}</p>
+                <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>
+                    {note.createdBy?.firstName} {note.createdBy?.lastName}
+                  </span>
+                  <span>•</span>
+                  <span>{format(new Date(note.createdAt), "MMM d, h:mm a")}</span>
+                </div>
+              </div>
+            </div>
+            {isActive && isOwner && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => onEdit(note)}>
+                    <Pencil className="mr-2 h-4 w-4" />
+                    Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-destructive"
+                    onClick={() => onDelete(note.id)}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function LiveMeetingPage({
   params,
 }: {
@@ -143,6 +300,32 @@ export default function LiveMeetingPage({
   const { meeting, isLoading, error, refetch } = useMeeting(id);
   const { getToken } = useAuth();
   const { user: currentUser } = useUser();
+  const {
+    onNoteCreated,
+    onNoteUpdated,
+    onNoteDeleted,
+    onNotesReordered,
+    onAgendaCreated,
+    onAgendaUpdated,
+    onAgendaDeleted,
+    onAgendaReordered,
+    onDecisionCreated,
+    onDecisionUpdated,
+    onDecisionDeleted,
+    onDecisionReordered,
+    onActionItemCreated,
+    onActionItemUpdated,
+    onActionItemDeleted,
+    onActionItemReordered,
+  } = useMeetingSocket(id);
+
+  // dnd-kit sensors for drag-and-drop
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const [isStarting, setIsStarting] = useState(false);
   const [isPausing, setIsPausing] = useState(false);
@@ -178,11 +361,23 @@ export default function LiveMeetingPage({
   const [actionPriority, setActionPriority] = useState<"HIGH" | "MEDIUM" | "LOW">("MEDIUM");
   const [isSubmittingAction, setIsSubmittingAction] = useState(false);
   const [companyMembers, setCompanyMembers] = useState<CompanyMember[]>([]);
+  const [editingActionId, setEditingActionId] = useState<string | null>(null);
+  const [deletingActionId, setDeletingActionId] = useState<string | null>(null);
+  const [showDeleteActionConfirm, setShowDeleteActionConfirm] = useState(false);
 
-  // Meeting notes state
-  const [meetingNotes, setMeetingNotes] = useState("");
-  const [isSavingNotes, setIsSavingNotes] = useState(false);
-  const [notesChanged, setNotesChanged] = useState(false);
+  // Meeting notes state (new multi-note system)
+  const [notes, setNotes] = useState<MeetingNote[]>([]);
+  const [newNoteContent, setNewNoteContent] = useState("");
+  const [isSubmittingNote, setIsSubmittingNote] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteContent, setEditingNoteContent] = useState("");
+  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
+  const [showDeleteNoteConfirm, setShowDeleteNoteConfirm] = useState(false);
+
+  // Real-time state for agenda items, decisions, and action items
+  const [agendaItems, setAgendaItems] = useState<any[]>([]);
+  const [decisions, setDecisions] = useState<any[]>([]);
+  const [actionItems, setActionItems] = useState<any[]>([]);
 
   // Load company members for action item assignment
   useEffect(() => {
@@ -204,12 +399,194 @@ export default function LiveMeetingPage({
     loadMembers();
   }, [companyId, getToken]);
 
-  // Load meeting notes when meeting loads
+  // Load meeting data when meeting loads
   useEffect(() => {
-    if (meeting?.notes) {
-      setMeetingNotes(meeting.notes);
+    if (meeting?.meetingNotes) {
+      setNotes(meeting.meetingNotes);
     }
-  }, [meeting?.notes]);
+    if (meeting?.agendaItems) {
+      setAgendaItems(meeting.agendaItems);
+    }
+    if (meeting?.decisions) {
+      setDecisions(meeting.decisions);
+    }
+    if (meeting?.actionItems) {
+      setActionItems(meeting.actionItems);
+    }
+  }, [meeting?.meetingNotes, meeting?.agendaItems, meeting?.decisions, meeting?.actionItems]);
+
+  // Set up socket event handlers for real-time note updates
+  useEffect(() => {
+    const unsubCreated = onNoteCreated((note) => {
+      setNotes((prev) => {
+        // Avoid duplicates
+        if (prev.some((n) => n.id === note.id)) return prev;
+        return [...prev, note];
+      });
+    });
+
+    const unsubUpdated = onNoteUpdated((note) => {
+      setNotes((prev) => prev.map((n) => (n.id === note.id ? note : n)));
+    });
+
+    const unsubDeleted = onNoteDeleted(({ id }) => {
+      setNotes((prev) => prev.filter((n) => n.id !== id));
+    });
+
+    const unsubReordered = onNotesReordered(({ noteIds }) => {
+      setNotes((prev) => {
+        const noteMap = new Map(prev.map((n) => [n.id, n]));
+        return noteIds.map((id) => noteMap.get(id)).filter(Boolean) as MeetingNote[];
+      });
+    });
+
+    return () => {
+      unsubCreated();
+      unsubUpdated();
+      unsubDeleted();
+      unsubReordered();
+    };
+  }, [onNoteCreated, onNoteUpdated, onNoteDeleted, onNotesReordered]);
+
+  // Set up socket event handlers for real-time agenda updates
+  useEffect(() => {
+    const unsubCreated = onAgendaCreated((item) => {
+      setAgendaItems((prev) => {
+        if (prev.some((a) => a.id === item.id)) return prev;
+        return [...prev, item].sort((a, b) => a.order - b.order);
+      });
+    });
+
+    const unsubUpdated = onAgendaUpdated((item) => {
+      setAgendaItems((prev) => prev.map((a) => (a.id === item.id ? item : a)));
+    });
+
+    const unsubDeleted = onAgendaDeleted(({ id }) => {
+      setAgendaItems((prev) => prev.filter((a) => a.id !== id));
+    });
+
+    const unsubReordered = onAgendaReordered(({ itemIds }) => {
+      setAgendaItems((prev) => {
+        const itemMap = new Map(prev.map((a) => [a.id, a]));
+        return itemIds.map((id) => itemMap.get(id)).filter(Boolean);
+      });
+    });
+
+    return () => {
+      unsubCreated();
+      unsubUpdated();
+      unsubDeleted();
+      unsubReordered();
+    };
+  }, [onAgendaCreated, onAgendaUpdated, onAgendaDeleted, onAgendaReordered]);
+
+  // Set up socket event handlers for real-time decision updates
+  useEffect(() => {
+    const unsubCreated = onDecisionCreated((decision) => {
+      setDecisions((prev) => {
+        if (prev.some((d) => d.id === decision.id)) return prev;
+        return [...prev, decision].sort((a, b) => a.order - b.order);
+      });
+    });
+
+    const unsubUpdated = onDecisionUpdated((decision) => {
+      setDecisions((prev) => prev.map((d) => (d.id === decision.id ? decision : d)));
+    });
+
+    const unsubDeleted = onDecisionDeleted(({ id }) => {
+      setDecisions((prev) => prev.filter((d) => d.id !== id));
+    });
+
+    const unsubReordered = onDecisionReordered(({ decisionIds }) => {
+      setDecisions((prev) => {
+        const decisionMap = new Map(prev.map((d) => [d.id, d]));
+        return decisionIds.map((id) => decisionMap.get(id)).filter(Boolean);
+      });
+    });
+
+    return () => {
+      unsubCreated();
+      unsubUpdated();
+      unsubDeleted();
+      unsubReordered();
+    };
+  }, [onDecisionCreated, onDecisionUpdated, onDecisionDeleted, onDecisionReordered]);
+
+  // Set up socket event handlers for real-time action item updates
+  useEffect(() => {
+    const unsubCreated = onActionItemCreated((item) => {
+      setActionItems((prev) => {
+        if (prev.some((a) => a.id === item.id)) return prev;
+        return [...prev, item].sort((a, b) => a.order - b.order);
+      });
+    });
+
+    const unsubUpdated = onActionItemUpdated((item) => {
+      setActionItems((prev) => prev.map((a) => (a.id === item.id ? item : a)));
+    });
+
+    const unsubDeleted = onActionItemDeleted(({ id }) => {
+      setActionItems((prev) => prev.filter((a) => a.id !== id));
+    });
+
+    const unsubReordered = onActionItemReordered(({ itemIds }) => {
+      setActionItems((prev) => {
+        const itemMap = new Map(prev.map((a) => [a.id, a]));
+        return itemIds.map((id) => itemMap.get(id)).filter(Boolean);
+      });
+    });
+
+    return () => {
+      unsubCreated();
+      unsubUpdated();
+      unsubDeleted();
+      unsubReordered();
+    };
+  }, [onActionItemCreated, onActionItemUpdated, onActionItemDeleted, onActionItemReordered]);
+
+  // Handle drag end for note reordering
+  const handleDragEnd = useCallback(
+    async (event: DragEndEvent) => {
+      const { active, over } = event;
+
+      if (!over || active.id === over.id) return;
+
+      const oldIndex = notes.findIndex((n) => n.id === active.id);
+      const newIndex = notes.findIndex((n) => n.id === over.id);
+
+      if (oldIndex === -1 || newIndex === -1) return;
+
+      // Optimistically update UI
+      const newNotes = arrayMove(notes, oldIndex, newIndex);
+      setNotes(newNotes);
+
+      // Call API to persist reorder
+      try {
+        const token = await getToken();
+        const response = await fetch(
+          `${API_URL}/companies/${companyId}/meetings/${id}/notes/reorder`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ noteIds: newNotes.map((n) => n.id) }),
+          }
+        );
+        if (!response.ok) {
+          // Revert on failure using functional update
+          setNotes((prev) => arrayMove(prev, newIndex, oldIndex));
+          console.error("Failed to reorder notes");
+        }
+      } catch (error) {
+        // Revert on error using functional update
+        setNotes((prev) => arrayMove(prev, newIndex, oldIndex));
+        console.error("Error reordering notes:", error);
+      }
+    },
+    [notes, companyId, id, getToken]
+  );
 
   const handleStartMeeting = async () => {
     try {
@@ -343,7 +720,7 @@ export default function LiveMeetingPage({
 
       setVoteDialogOpen(false);
       resetVoteForm();
-      await refetch();
+      // Socket event will handle adding the decision to the list
     } catch (error) {
       console.error("Error creating decision:", error);
       alert("Failed to create decision. Please try again.");
@@ -368,7 +745,7 @@ export default function LiveMeetingPage({
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || "Failed to cast vote");
       }
-      await refetch();
+      // Socket event will handle updating the decision
     } catch (error) {
       console.error("Error casting vote:", error);
       alert(error instanceof Error ? error.message : "Failed to cast vote. Please try again.");
@@ -390,7 +767,7 @@ export default function LiveMeetingPage({
       });
       if (!response.ok) throw new Error("Failed to finalize vote");
       setActiveVote(null);
-      await refetch();
+      // Socket event will handle updating the decision
     } catch (error) {
       console.error("Error finalizing vote:", error);
       alert("Failed to finalize vote. Please try again.");
@@ -403,6 +780,17 @@ export default function LiveMeetingPage({
     setActionAssigneeId("");
     setActionDueDate("");
     setActionPriority("MEDIUM");
+    setEditingActionId(null);
+  };
+
+  const handleOpenEditAction = (item: any) => {
+    setEditingActionId(item.id);
+    setActionTitle(item.title);
+    setActionDescription(item.description || "");
+    setActionAssigneeId(item.assigneeId || "");
+    setActionDueDate(item.dueDate ? format(new Date(item.dueDate), "yyyy-MM-dd") : "");
+    setActionPriority(item.priority || "MEDIUM");
+    setActionDialogOpen(true);
   };
 
   const handleCreateAction = async () => {
@@ -410,8 +798,14 @@ export default function LiveMeetingPage({
     try {
       setIsSubmittingAction(true);
       const token = await getToken();
-      const response = await fetch(`${API_URL}/companies/${companyId}/action-items`, {
-        method: "POST",
+
+      const isEditing = !!editingActionId;
+      const url = isEditing
+        ? `${API_URL}/companies/${companyId}/action-items/${editingActionId}`
+        : `${API_URL}/companies/${companyId}/action-items`;
+
+      const response = await fetch(url, {
+        method: isEditing ? "PUT" : "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -422,42 +816,115 @@ export default function LiveMeetingPage({
           assigneeId: actionAssigneeId || undefined,
           dueDate: actionDueDate || undefined,
           priority: actionPriority,
-          meetingId: id,
+          ...(isEditing ? {} : { meetingId: id }),
         }),
       });
-      if (!response.ok) throw new Error("Failed to create action item");
+      if (!response.ok) throw new Error(`Failed to ${isEditing ? "update" : "create"} action item`);
       resetActionForm();
       setActionDialogOpen(false);
-      await refetch();
+      // Socket event will handle adding/updating the action item
     } catch (error) {
-      console.error("Error creating action item:", error);
-      alert("Failed to create action item. Please try again.");
+      console.error("Error saving action item:", error);
+      alert(`Failed to ${editingActionId ? "update" : "create"} action item. Please try again.`);
     } finally {
       setIsSubmittingAction(false);
     }
   };
 
-  const handleSaveNotes = async () => {
+  const handleDeleteAction = async () => {
+    if (!deletingActionId || !companyId) return;
     try {
-      setIsSavingNotes(true);
+      const token = await getToken();
+      const response = await fetch(`${API_URL}/companies/${companyId}/action-items/${deletingActionId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) throw new Error("Failed to delete action item");
+      setShowDeleteActionConfirm(false);
+      setDeletingActionId(null);
+      // Socket event will handle removing the action item
+    } catch (error) {
+      console.error("Error deleting action item:", error);
+      alert("Failed to delete action item. Please try again.");
+    }
+  };
+
+  const handleCreateNote = async () => {
+    if (!newNoteContent.trim() || !companyId) return;
+    try {
+      setIsSubmittingNote(true);
       const token = await getToken();
       const response = await fetch(`${API_URL}/companies/${companyId}/meetings/${id}/notes`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ content: newNoteContent.trim() }),
+      });
+      if (!response.ok) throw new Error("Failed to create note");
+      setNewNoteContent("");
+      // Note will be added via socket event
+    } catch (error) {
+      console.error("Error creating note:", error);
+      alert("Failed to create note. Please try again.");
+    } finally {
+      setIsSubmittingNote(false);
+    }
+  };
+
+  const handleUpdateNote = async () => {
+    if (!editingNoteId || !editingNoteContent.trim() || !companyId) return;
+    try {
+      const token = await getToken();
+      const response = await fetch(`${API_URL}/companies/${companyId}/meetings/${id}/notes/${editingNoteId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ notes: meetingNotes }),
+        body: JSON.stringify({ content: editingNoteContent.trim() }),
       });
-      if (!response.ok) throw new Error("Failed to save notes");
-      setNotesChanged(false);
-      await refetch();
+      if (!response.ok) throw new Error("Failed to update note");
+      setEditingNoteId(null);
+      setEditingNoteContent("");
+      // Update will be received via socket event
     } catch (error) {
-      console.error("Error saving notes:", error);
-      alert("Failed to save notes. Please try again.");
-    } finally {
-      setIsSavingNotes(false);
+      console.error("Error updating note:", error);
+      alert("Failed to update note. Please try again.");
     }
+  };
+
+  const handleDeleteNote = async () => {
+    if (!deletingNoteId || !companyId) return;
+    try {
+      const token = await getToken();
+      const response = await fetch(`${API_URL}/companies/${companyId}/meetings/${id}/notes/${deletingNoteId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) throw new Error("Failed to delete note");
+      setShowDeleteNoteConfirm(false);
+      setDeletingNoteId(null);
+      // Delete will be received via socket event
+    } catch (error) {
+      console.error("Error deleting note:", error);
+      alert("Failed to delete note. Please try again.");
+    }
+  };
+
+  const handleOpenEditNote = (note: MeetingNote) => {
+    setEditingNoteId(note.id);
+    setEditingNoteContent(note.content);
+  };
+
+  const handleCancelEditNote = () => {
+    setEditingNoteId(null);
+    setEditingNoteContent("");
   };
 
   if (isLoading) {
@@ -489,9 +956,7 @@ export default function LiveMeetingPage({
   const isInProgress = meeting.status === "IN_PROGRESS";
   const isPaused = meeting.status === "PAUSED";
   const isActive = isInProgress || isPaused;
-  const agendaItems = meeting.agendaItems || [];
   const attendees = meeting.attendees || [];
-  const decisions = meeting.decisions || [];
 
   return (
     <TooltipProvider>
@@ -647,8 +1112,8 @@ export default function LiveMeetingPage({
         </CardContent>
       </Card>
 
-      {/* Main Content Grid */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/* Main Content - Full Width Stacked */}
+      <div className="space-y-6">
         {/* Agenda Section */}
         <Card>
           <CardHeader>
@@ -898,9 +1363,9 @@ export default function LiveMeetingPage({
             </div>
           </CardHeader>
           <CardContent>
-            {meeting.actionItems && meeting.actionItems.length > 0 ? (
+            {actionItems.length > 0 ? (
               <div className="space-y-3">
-                {meeting.actionItems.map((item: any) => (
+                {actionItems.map((item: any) => (
                   <div key={item.id} className="flex items-start gap-3 rounded-lg border p-3">
                     <div className={`mt-0.5 h-2 w-2 rounded-full ${
                       item.status === "COMPLETED" ? "bg-green-500" :
@@ -938,6 +1403,31 @@ export default function LiveMeetingPage({
                         </Badge>
                       </div>
                     </div>
+                    {isActive && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleOpenEditAction(item)}>
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onClick={() => {
+                              setDeletingActionId(item.id);
+                              setShowDeleteActionConfirm(true);
+                            }}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </div>
                 ))}
                 {isActive && (
@@ -965,35 +1455,80 @@ export default function LiveMeetingPage({
         {/* Notes Section */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="rounded-lg bg-slate-100 p-2">
-                  <StickyNote className="h-5 w-5 text-slate-600" />
-                </div>
-                <div>
-                  <CardTitle>Meeting Notes</CardTitle>
-                  <CardDescription>General notes and comments</CardDescription>
-                </div>
+            <div className="flex items-center gap-2">
+              <div className="rounded-lg bg-slate-100 p-2">
+                <StickyNote className="h-5 w-5 text-slate-600" />
               </div>
-              {isActive && notesChanged && (
-                <Button size="sm" onClick={handleSaveNotes} disabled={isSavingNotes}>
-                  {isSavingNotes && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Notes
-                </Button>
-              )}
+              <div>
+                <CardTitle>Meeting Notes</CardTitle>
+                <CardDescription>{notes.length} note{notes.length !== 1 ? "s" : ""}</CardDescription>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
-            <Textarea
-              placeholder="Add meeting notes here..."
-              className="min-h-[150px]"
-              value={meetingNotes}
-              onChange={(e) => {
-                setMeetingNotes(e.target.value);
-                setNotesChanged(true);
-              }}
-              disabled={!isActive}
-            />
+            {/* Add Note Input */}
+            {isActive && (
+              <div className="mb-4 flex gap-2">
+                <Input
+                  placeholder="Add a note..."
+                  value={newNoteContent}
+                  onChange={(e) => setNewNoteContent(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleCreateNote();
+                    }
+                  }}
+                  disabled={isSubmittingNote}
+                />
+                <Button onClick={handleCreateNote} disabled={isSubmittingNote || !newNoteContent.trim()}>
+                  {isSubmittingNote ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                </Button>
+              </div>
+            )}
+
+            {/* Notes List with Drag-and-Drop */}
+            {notes.length > 0 ? (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={notes.map((n) => n.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-3">
+                    {notes.map((note) => (
+                      <SortableNote
+                        key={note.id}
+                        note={note}
+                        isActive={isActive}
+                        isOwner={note.createdById === currentUser?.id}
+                        editingNoteId={editingNoteId}
+                        editingNoteContent={editingNoteContent}
+                        setEditingNoteContent={setEditingNoteContent}
+                        onEdit={handleOpenEditNote}
+                        onCancelEdit={handleCancelEditNote}
+                        onSave={handleUpdateNote}
+                        onDelete={(noteId) => {
+                          setDeletingNoteId(noteId);
+                          setShowDeleteNoteConfirm(true);
+                        }}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
+            ) : (
+              <div className="py-8 text-center">
+                <StickyNote className="mx-auto h-8 w-8 text-muted-foreground/50" />
+                <p className="mt-2 text-sm text-muted-foreground">No notes yet</p>
+                {!isActive && (
+                  <p className="mt-1 text-xs text-muted-foreground">Start the meeting to add notes</p>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -1095,8 +1630,10 @@ export default function LiveMeetingPage({
       }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Action Item</DialogTitle>
-            <DialogDescription>Create a new action item from this meeting.</DialogDescription>
+            <DialogTitle>{editingActionId ? "Edit Action Item" : "Add Action Item"}</DialogTitle>
+            <DialogDescription>
+              {editingActionId ? "Update the action item details." : "Create a new action item from this meeting."}
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
@@ -1171,11 +1708,47 @@ export default function LiveMeetingPage({
             </Button>
             <Button onClick={handleCreateAction} disabled={isSubmittingAction || !actionTitle.trim()}>
               {isSubmittingAction && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create
+              {editingActionId ? "Save Changes" : "Create"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Action Item Confirmation */}
+      <AlertDialog open={showDeleteActionConfirm} onOpenChange={setShowDeleteActionConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Action Item?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. The action item will be permanently deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeletingActionId(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteAction} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Note Confirmation */}
+      <AlertDialog open={showDeleteNoteConfirm} onOpenChange={setShowDeleteNoteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Note?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. The note will be permanently deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeletingNoteId(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteNote} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
     </TooltipProvider>
   );

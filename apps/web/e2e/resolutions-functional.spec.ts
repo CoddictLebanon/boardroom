@@ -66,8 +66,8 @@ test.describe('Resolutions - Full CRUD Functionality', () => {
     // Wait for resolution to be created
     await page.waitForTimeout(2000);
 
-    // Verify resolution was created
-    const resolution = page.locator(`text=${testResolutionTitle}`);
+    // Verify resolution was created (use .first() to handle potential duplicates from parallel runs)
+    const resolution = page.locator(`text=${testResolutionTitle}`).first();
     await expect(resolution).toBeVisible({ timeout: 10000 });
   });
 
@@ -76,9 +76,10 @@ test.describe('Resolutions - Full CRUD Functionality', () => {
 
     await page.goto(`/companies/${companyId}/resolutions`);
     await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
-    // Verify our test resolution is visible
-    const resolution = page.locator(`text=${testResolutionTitle}`);
+    // Verify our test resolution is visible (use .first() to handle potential duplicates)
+    const resolution = page.locator(`text=${testResolutionTitle}`).first();
     await expect(resolution).toBeVisible({ timeout: 10000 });
   });
 

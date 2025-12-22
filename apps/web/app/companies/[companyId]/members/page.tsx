@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@clerk/nextjs";
 import { useParams } from "next/navigation";
+import { usePermission } from "@/lib/permissions";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
 
@@ -64,6 +65,9 @@ export default function MembersPage() {
   const { getToken } = useAuth();
   const params = useParams();
   const companyId = params.companyId as string;
+
+  const canInvite = usePermission("members.invite");
+  const canRemove = usePermission("members.remove");
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [email, setEmail] = useState("");
@@ -237,10 +241,12 @@ export default function MembersPage() {
           <h1 className="text-2xl font-bold tracking-tight">Board Members</h1>
           <p className="text-muted-foreground">Manage your board member directory</p>
         </div>
-        <Button onClick={() => setDialogOpen(true)}>
-          <UserPlus className="mr-2 h-4 w-4" />
-          Invite Member
-        </Button>
+        {canInvite && (
+          <Button onClick={() => setDialogOpen(true)}>
+            <UserPlus className="mr-2 h-4 w-4" />
+            Invite Member
+          </Button>
+        )}
       </div>
 
       {/* Stats */}
@@ -315,13 +321,15 @@ export default function MembersPage() {
                       </p>
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleRevokeInvitation(invitation.id)}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
+                  {canRemove && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRevokeInvitation(invitation.id)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
@@ -356,10 +364,12 @@ export default function MembersPage() {
               <p className="mt-2 text-sm text-muted-foreground">
                 Invite members to get started.
               </p>
-              <Button className="mt-4" onClick={() => setDialogOpen(true)}>
-                <UserPlus className="mr-2 h-4 w-4" />
-                Invite Member
-              </Button>
+              {canInvite && (
+                <Button className="mt-4" onClick={() => setDialogOpen(true)}>
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Invite Member
+                </Button>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
@@ -389,7 +399,7 @@ export default function MembersPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge variant={getRoleBadgeVariant(member.role)}>{formatRole(member.role)}</Badge>
-                    {member.role !== "OWNER" && (
+                    {canRemove && member.role !== "OWNER" && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon" className="h-8 w-8">

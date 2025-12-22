@@ -3,9 +3,11 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
+import { MeetingsGateway } from '../gateway/meetings.gateway';
 import {
   CreateMeetingDto,
   UpdateMeetingDto,
@@ -20,10 +22,15 @@ import { MeetingStatus, DecisionOutcome } from '@prisma/client';
 
 @Injectable()
 export class MeetingsService {
+  private readonly logger = new Logger(MeetingsService.name);
+
   constructor(
     private prisma: PrismaService,
     private emailService: EmailService,
-  ) {}
+    private meetingsGateway: MeetingsGateway,
+  ) {
+    this.logger.log(`MeetingsService initialized, gateway injected: ${!!this.meetingsGateway}`);
+  }
 
   async createMeeting(companyId: string, userId: string, dto: CreateMeetingDto) {
     // Verify user is a member of the company
@@ -229,7 +236,7 @@ export class MeetingsService {
                 imageUrl: true,
               },
             },
-            creator: {
+            createdBy: {
               select: {
                 id: true,
                 firstName: true,
@@ -502,6 +509,14 @@ export class MeetingsService {
       }
     }
 
+    // Get max order for this meeting's decisions
+    const maxOrderItem = await this.prisma.decision.findFirst({
+      where: { meetingId },
+      orderBy: { order: 'desc' },
+      select: { order: true },
+    });
+    const nextOrder = (maxOrderItem?.order ?? -1) + 1;
+
     const decision = await this.prisma.decision.create({
       data: {
         meetingId,
@@ -509,6 +524,7 @@ export class MeetingsService {
         createdById: userId,
         title: dto.title,
         description: dto.description,
+        order: nextOrder,
       },
       include: {
         votes: {
@@ -527,6 +543,16 @@ export class MeetingsService {
         },
       },
     });
+
+    // Emit socket event
+    try {
+      this.logger.log(`Emitting decision:created to meeting ${meetingId}`);
+      this.meetingsGateway.emitToMeeting(meetingId, 'decision:created', decision);
+      this.logger.log(`Successfully emitted decision:created event`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to emit decision:created event: ${errorMessage}`);
+    }
 
     return decision;
   }
@@ -720,7 +746,7 @@ export class MeetingsService {
     meetingId: string,
     decisionId: string,
     userId: string,
-    dto: { outcome: 'PASSED' | 'REJECTED' | 'TABLED' },
+    dto: { outcome?: 'PASSED' | 'REJECTED' | 'TABLED'; title?: string; description?: string },
   ) {
     const meeting = await this.getMeeting(meetingId, userId);
 
@@ -739,7 +765,9 @@ export class MeetingsService {
     const updated = await this.prisma.decision.update({
       where: { id: decisionId },
       data: {
-        outcome: dto.outcome as DecisionOutcome,
+        ...(dto.outcome && { outcome: dto.outcome as DecisionOutcome }),
+        ...(dto.title && { title: dto.title }),
+        ...(dto.description !== undefined && { description: dto.description }),
       },
       include: {
         votes: {
@@ -748,10 +776,99 @@ export class MeetingsService {
           },
         },
         agendaItem: true,
+        createdBy: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            imageUrl: true,
+          },
+        },
       },
     });
 
+    // Emit socket event
+    try {
+      this.meetingsGateway.emitToMeeting(meetingId, 'decision:updated', updated);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to emit decision:updated event: ${errorMessage}`);
+    }
+
     return updated;
+  }
+
+  async deleteDecision(meetingId: string, decisionId: string, userId: string) {
+    const meeting = await this.getMeeting(meetingId, userId);
+
+    if (meeting.status === MeetingStatus.COMPLETED) {
+      throw new BadRequestException('Cannot delete decisions from a completed meeting');
+    }
+
+    // Verify decision belongs to meeting
+    const decision = await this.prisma.decision.findFirst({
+      where: {
+        id: decisionId,
+        meetingId,
+      },
+    });
+
+    if (!decision) {
+      throw new NotFoundException('Decision not found');
+    }
+
+    await this.prisma.decision.delete({
+      where: { id: decisionId },
+    });
+
+    // Emit socket event
+    try {
+      this.meetingsGateway.emitToMeeting(meetingId, 'decision:deleted', { id: decisionId });
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to emit decision:deleted event: ${errorMessage}`);
+    }
+
+    return { message: 'Decision deleted successfully' };
+  }
+
+  async reorderDecisions(meetingId: string, decisionIds: string[], userId: string) {
+    await this.getMeeting(meetingId, userId);
+
+    const updates = decisionIds.map((decisionId, index) =>
+      this.prisma.decision.update({
+        where: { id: decisionId },
+        data: { order: index },
+        include: {
+          votes: {
+            include: {
+              user: true,
+            },
+          },
+          agendaItem: true,
+          createdBy: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              imageUrl: true,
+            },
+          },
+        },
+      }),
+    );
+
+    const decisions = await this.prisma.$transaction(updates);
+
+    // Emit socket event
+    try {
+      this.meetingsGateway.emitToMeeting(meetingId, 'decision:reordered', { decisionIds });
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to emit decision:reordered event: ${errorMessage}`);
+    }
+
+    return decisions;
   }
 
   async completeMeeting(meetingId: string, userId: string) {

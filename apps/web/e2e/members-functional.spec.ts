@@ -326,7 +326,7 @@ test.describe('Settings Page', () => {
     await page.waitForLoadState('networkidle');
 
     // Should show permissions page
-    const heading = page.locator('h1, h2').filter({ hasText: /permissions|roles/i });
+    const heading = page.locator('h1, h2').filter({ hasText: /role permissions/i });
     await expect(heading.first()).toBeVisible({ timeout: 10000 });
   });
 

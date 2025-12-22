@@ -1,6 +1,7 @@
 "use client";
 
 import { SocketProvider } from "@/lib/socket";
+import { PermissionProvider } from "@/lib/permissions";
 
 interface CompanyLayoutClientProps {
   companyId: string;
@@ -8,5 +9,11 @@ interface CompanyLayoutClientProps {
 }
 
 export function CompanyLayoutClient({ companyId, children }: CompanyLayoutClientProps) {
-  return <SocketProvider>{children}</SocketProvider>;
+  return (
+    <SocketProvider>
+      <PermissionProvider companyId={companyId}>
+        {children}
+      </PermissionProvider>
+    </SocketProvider>
+  );
 }

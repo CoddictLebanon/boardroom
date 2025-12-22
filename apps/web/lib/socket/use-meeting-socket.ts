@@ -33,6 +33,126 @@ export interface MeetingStatusEvent {
   updatedAt: string;
 }
 
+export interface MeetingNote {
+  id: string;
+  meetingId: string;
+  content: string;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string;
+    imageUrl?: string;
+  };
+}
+
+export interface NoteDeletedEvent {
+  id: string;
+}
+
+export interface NotesReorderedEvent {
+  noteIds: string[];
+}
+
+// Agenda Item types
+export interface AgendaItem {
+  id: string;
+  meetingId: string;
+  title: string;
+  description?: string;
+  duration?: number;
+  order: number;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string;
+    imageUrl?: string;
+  };
+}
+
+export interface AgendaDeletedEvent {
+  id: string;
+}
+
+export interface AgendaReorderedEvent {
+  itemIds: string[];
+}
+
+// Decision types
+export interface Decision {
+  id: string;
+  meetingId: string;
+  title: string;
+  description?: string;
+  outcome?: string;
+  order: number;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    imageUrl?: string;
+  };
+  votes?: any[];
+  agendaItem?: any;
+}
+
+export interface DecisionDeletedEvent {
+  id: string;
+}
+
+export interface DecisionReorderedEvent {
+  decisionIds: string[];
+}
+
+// Action Item types
+export interface ActionItem {
+  id: string;
+  meetingId?: string;
+  companyId: string;
+  title: string;
+  description?: string;
+  status: string;
+  priority: string;
+  dueDate?: string;
+  order: number;
+  createdById: string;
+  assigneeId?: string;
+  createdAt: string;
+  updatedAt: string;
+  assignee?: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string;
+    imageUrl?: string;
+  };
+  createdBy?: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string;
+    imageUrl?: string;
+  };
+}
+
+export interface ActionItemDeletedEvent {
+  id: string;
+}
+
+export interface ActionItemReorderedEvent {
+  itemIds: string[];
+}
+
 export function useMeetingSocket(meetingId: string | null) {
   const { socket, isConnected, error } = useSocket();
   const [isInMeeting, setIsInMeeting] = useState(false);
@@ -45,12 +165,13 @@ export function useMeetingSocket(meetingId: string | null) {
 
     try {
       socket.emit("meeting:join", { meetingId }, (response: any) => {
-        if (response.success) {
+        if (response?.success) {
           setIsInMeeting(true);
           setCurrentAttendees(response.currentAttendees || []);
           setMeetingError(null);
         } else {
-          setMeetingError(response.error || "Failed to join meeting");
+          const error = response?.error || "Failed to join meeting";
+          setMeetingError(error);
         }
       });
     } catch (err) {
@@ -181,18 +302,185 @@ export function useMeetingSocket(meetingId: string | null) {
     [socket]
   );
 
+  // Note event handlers
+  const onNoteCreated = useCallback(
+    (callback: (note: MeetingNote) => void) => {
+      if (!socket) return () => {};
+
+      socket.on("note:created", callback);
+      return () => socket.off("note:created", callback);
+    },
+    [socket]
+  );
+
+  const onNoteUpdated = useCallback(
+    (callback: (note: MeetingNote) => void) => {
+      if (!socket) return () => {};
+
+      socket.on("note:updated", callback);
+      return () => socket.off("note:updated", callback);
+    },
+    [socket]
+  );
+
+  const onNoteDeleted = useCallback(
+    (callback: (event: NoteDeletedEvent) => void) => {
+      if (!socket) return () => {};
+
+      socket.on("note:deleted", callback);
+      return () => socket.off("note:deleted", callback);
+    },
+    [socket]
+  );
+
+  const onNotesReordered = useCallback(
+    (callback: (event: NotesReorderedEvent) => void) => {
+      if (!socket) return () => {};
+
+      socket.on("notes:reordered", callback);
+      return () => socket.off("notes:reordered", callback);
+    },
+    [socket]
+  );
+
+  // Agenda Item event handlers
+  const onAgendaCreated = useCallback(
+    (callback: (item: AgendaItem) => void) => {
+      if (!socket) return () => {};
+
+      socket.on("agenda:created", callback);
+      return () => socket.off("agenda:created", callback);
+    },
+    [socket]
+  );
+
+  const onAgendaUpdated = useCallback(
+    (callback: (item: AgendaItem) => void) => {
+      if (!socket) return () => {};
+
+      socket.on("agenda:updated", callback);
+      return () => socket.off("agenda:updated", callback);
+    },
+    [socket]
+  );
+
+  const onAgendaDeleted = useCallback(
+    (callback: (event: AgendaDeletedEvent) => void) => {
+      if (!socket) return () => {};
+
+      socket.on("agenda:deleted", callback);
+      return () => socket.off("agenda:deleted", callback);
+    },
+    [socket]
+  );
+
+  const onAgendaReordered = useCallback(
+    (callback: (event: AgendaReorderedEvent) => void) => {
+      if (!socket) return () => {};
+
+      socket.on("agenda:reordered", callback);
+      return () => socket.off("agenda:reordered", callback);
+    },
+    [socket]
+  );
+
+  // Decision event handlers
+  const onDecisionCreated = useCallback(
+    (callback: (decision: Decision) => void) => {
+      if (!socket) return () => {};
+
+      socket.on("decision:created", callback);
+      return () => socket.off("decision:created", callback);
+    },
+    [socket]
+  );
+
+  const onDecisionUpdated = useCallback(
+    (callback: (decision: Decision) => void) => {
+      if (!socket) return () => {};
+
+      socket.on("decision:updated", callback);
+      return () => socket.off("decision:updated", callback);
+    },
+    [socket]
+  );
+
+  const onDecisionDeleted = useCallback(
+    (callback: (event: DecisionDeletedEvent) => void) => {
+      if (!socket) return () => {};
+
+      socket.on("decision:deleted", callback);
+      return () => socket.off("decision:deleted", callback);
+    },
+    [socket]
+  );
+
+  const onDecisionReordered = useCallback(
+    (callback: (event: DecisionReorderedEvent) => void) => {
+      if (!socket) return () => {};
+
+      socket.on("decision:reordered", callback);
+      return () => socket.off("decision:reordered", callback);
+    },
+    [socket]
+  );
+
+  // Action Item event handlers
+  const onActionItemCreated = useCallback(
+    (callback: (item: ActionItem) => void) => {
+      if (!socket) return () => {};
+
+      socket.on("actionItem:created", callback);
+      return () => socket.off("actionItem:created", callback);
+    },
+    [socket]
+  );
+
+  const onActionItemUpdated = useCallback(
+    (callback: (item: ActionItem) => void) => {
+      if (!socket) return () => {};
+
+      socket.on("actionItem:updated", callback);
+      return () => socket.off("actionItem:updated", callback);
+    },
+    [socket]
+  );
+
+  const onActionItemDeleted = useCallback(
+    (callback: (event: ActionItemDeletedEvent) => void) => {
+      if (!socket) return () => {};
+
+      socket.on("actionItem:deleted", callback);
+      return () => socket.off("actionItem:deleted", callback);
+    },
+    [socket]
+  );
+
+  const onActionItemReordered = useCallback(
+    (callback: (event: ActionItemReorderedEvent) => void) => {
+      if (!socket) return () => {};
+
+      socket.on("actionItem:reordered", callback);
+      return () => socket.off("actionItem:reordered", callback);
+    },
+    [socket]
+  );
+
   // Auto-join meeting when connected
   useEffect(() => {
     if (meetingId && isConnected && !isInMeeting) {
       joinMeeting();
     }
+  }, [meetingId, isConnected, isInMeeting, joinMeeting]);
 
+  // Cleanup: leave meeting on unmount
+  useEffect(() => {
     return () => {
       if (isInMeeting) {
         leaveMeeting();
       }
     };
-  }, [meetingId, isConnected]);
+  }, [isInMeeting, leaveMeeting]);
 
   // Update attendees list on events
   useEffect(() => {
@@ -238,5 +526,25 @@ export function useMeetingSocket(meetingId: string | null) {
     onAttendeeLeft,
     onAttendanceUpdate,
     onMeetingStatusUpdate,
+    // Note events
+    onNoteCreated,
+    onNoteUpdated,
+    onNoteDeleted,
+    onNotesReordered,
+    // Agenda events
+    onAgendaCreated,
+    onAgendaUpdated,
+    onAgendaDeleted,
+    onAgendaReordered,
+    // Decision events
+    onDecisionCreated,
+    onDecisionUpdated,
+    onDecisionDeleted,
+    onDecisionReordered,
+    // Action Item events
+    onActionItemCreated,
+    onActionItemUpdated,
+    onActionItemDeleted,
+    onActionItemReordered,
   };
 }

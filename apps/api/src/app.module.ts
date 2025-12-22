@@ -22,6 +22,7 @@ import { PermissionsModule } from './permissions/permissions.module';
 import { CustomRolesModule } from './custom-roles/custom-roles.module';
 import { MeetingNotesModule } from './meeting-notes/meeting-notes.module';
 import { OkrsModule } from './okrs/okrs.module';
+import { PermissionsModule } from './permissions/permissions.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { OkrsModule } from './okrs/okrs.module';
     MonthlyFinancialsModule,
     MeetingNotesModule,
     OkrsModule,
+    PermissionsModule,
   ],
   controllers: [AppController],
   providers: [

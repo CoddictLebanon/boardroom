@@ -357,11 +357,12 @@ export default function NewMeetingPage() {
                       }`}
                       onClick={() => toggleMemberSelection(member.id)}
                     >
-                      <Checkbox
-                        checked={selectedMemberIds.includes(member.id)}
-                        onCheckedChange={() => toggleMemberSelection(member.id)}
-                        onClick={(e) => e.stopPropagation()}
-                      />
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedMemberIds.includes(member.id)}
+                          onCheckedChange={() => toggleMemberSelection(member.id)}
+                        />
+                      </div>
                       <Avatar className="h-8 w-8">
                         <AvatarImage src={member.user?.imageUrl || undefined} />
                         <AvatarFallback className="text-xs">

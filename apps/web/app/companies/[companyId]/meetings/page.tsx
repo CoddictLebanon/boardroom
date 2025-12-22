@@ -6,10 +6,12 @@ import { MeetingsList } from "@/components/meetings/meetings-list";
 import { Plus } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { usePermission } from "@/lib/permissions";
 
 export default function MeetingsPage() {
   const params = useParams();
   const companyId = params.companyId as string;
+  const canCreate = usePermission("meetings.create");
 
   return (
     <div className="space-y-6">
@@ -21,12 +23,14 @@ export default function MeetingsPage() {
             Schedule and manage your board meetings
           </p>
         </div>
-        <Button asChild>
-          <Link href={`/companies/${companyId}/meetings/new`}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Meeting
-          </Link>
-        </Button>
+        {canCreate && (
+          <Button asChild>
+            <Link href={`/companies/${companyId}/meetings/new`}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Meeting
+            </Link>
+          </Button>
+        )}
       </div>
 
       {/* Tabs */}

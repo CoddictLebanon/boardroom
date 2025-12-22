@@ -1,11 +1,17 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { MeetingsGateway } from '../gateway/meetings.gateway';
 import { CreateActionItemDto, UpdateActionItemDto, UpdateActionItemStatusDto } from './dto';
 import { ActionStatus, Priority, Prisma } from '@prisma/client';
 
 @Injectable()
 export class ActionItemsService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(ActionItemsService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    @Optional() private meetingsGateway?: MeetingsGateway,
+  ) {}
 
   async create(companyId: string, dto: CreateActionItemDto, userId: string) {
     // Verify user has access to the company
@@ -16,7 +22,18 @@ export class ActionItemsService {
       await this.verifyCompanyMember(dto.assigneeId, companyId);
     }
 
-    return this.prisma.actionItem.create({
+    // Get max order for this meeting's action items (if meeting-scoped)
+    let nextOrder = 0;
+    if (dto.meetingId) {
+      const maxOrderItem = await this.prisma.actionItem.findFirst({
+        where: { meetingId: dto.meetingId },
+        orderBy: { order: 'desc' },
+        select: { order: true },
+      });
+      nextOrder = (maxOrderItem?.order ?? -1) + 1;
+    }
+
+    const actionItem = await this.prisma.actionItem.create({
       data: {
         companyId,
         title: dto.title,
@@ -28,6 +45,7 @@ export class ActionItemsService {
         status: dto.status || ActionStatus.PENDING,
         meetingId: dto.meetingId,
         agendaItemId: dto.agendaItemId,
+        order: nextOrder,
       },
       include: {
         assignee: {
@@ -56,6 +74,18 @@ export class ActionItemsService {
         },
       },
     });
+
+    // Emit socket event if associated with a meeting
+    if (actionItem.meetingId) {
+      try {
+        this.meetingsGateway?.emitToMeeting(actionItem.meetingId, 'actionItem:created', actionItem);
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        this.logger.error(`Failed to emit actionItem:created event: ${errorMessage}`);
+      }
+    }
+
+    return actionItem;
   }
 
   async findAll(
@@ -237,23 +267,23 @@ export class ActionItemsService {
   }
 
   async update(id: string, dto: UpdateActionItemDto, userId: string) {
-    const actionItem = await this.prisma.actionItem.findUnique({
+    const existing = await this.prisma.actionItem.findUnique({
       where: { id },
     });
 
-    if (!actionItem) {
+    if (!existing) {
       throw new NotFoundException('Action item not found');
     }
 
     // Verify user has access to the company
-    await this.verifyCompanyAccess(userId, actionItem.companyId);
+    await this.verifyCompanyAccess(userId, existing.companyId);
 
     // If updating assignee, verify new assignee is a member of the company
-    if (dto.assigneeId && dto.assigneeId !== actionItem.assigneeId) {
-      await this.verifyCompanyMember(dto.assigneeId, actionItem.companyId);
+    if (dto.assigneeId && dto.assigneeId !== existing.assigneeId) {
+      await this.verifyCompanyMember(dto.assigneeId, existing.companyId);
     }
 
-    return this.prisma.actionItem.update({
+    const actionItem = await this.prisma.actionItem.update({
       where: { id },
       data: {
         title: dto.title,
@@ -290,21 +320,33 @@ export class ActionItemsService {
         },
       },
     });
+
+    // Emit socket event if associated with a meeting
+    if (actionItem.meetingId) {
+      try {
+        this.meetingsGateway?.emitToMeeting(actionItem.meetingId, 'actionItem:updated', actionItem);
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        this.logger.error(`Failed to emit actionItem:updated event: ${errorMessage}`);
+      }
+    }
+
+    return actionItem;
   }
 
   async updateStatus(id: string, dto: UpdateActionItemStatusDto, userId: string) {
-    const actionItem = await this.prisma.actionItem.findUnique({
+    const existing = await this.prisma.actionItem.findUnique({
       where: { id },
     });
 
-    if (!actionItem) {
+    if (!existing) {
       throw new NotFoundException('Action item not found');
     }
 
     // Verify user has access to the company
-    await this.verifyCompanyAccess(userId, actionItem.companyId);
+    await this.verifyCompanyAccess(userId, existing.companyId);
 
-    return this.prisma.actionItem.update({
+    const actionItem = await this.prisma.actionItem.update({
       where: { id },
       data: {
         status: dto.status,
@@ -336,6 +378,18 @@ export class ActionItemsService {
         },
       },
     });
+
+    // Emit socket event if associated with a meeting
+    if (actionItem.meetingId) {
+      try {
+        this.meetingsGateway?.emitToMeeting(actionItem.meetingId, 'actionItem:updated', actionItem);
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        this.logger.error(`Failed to emit actionItem:updated event: ${errorMessage}`);
+      }
+    }
+
+    return actionItem;
   }
 
   async remove(id: string, userId: string) {
@@ -350,11 +404,83 @@ export class ActionItemsService {
     // Verify user has access to the company
     await this.verifyCompanyAccess(userId, actionItem.companyId);
 
+    const meetingId = actionItem.meetingId;
+
     await this.prisma.actionItem.delete({
       where: { id },
     });
 
+    // Emit socket event if associated with a meeting
+    if (meetingId) {
+      try {
+        this.meetingsGateway?.emitToMeeting(meetingId, 'actionItem:deleted', { id });
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        this.logger.error(`Failed to emit actionItem:deleted event: ${errorMessage}`);
+      }
+    }
+
     return { message: 'Action item deleted successfully' };
+  }
+
+  async reorder(meetingId: string, itemIds: string[], userId: string) {
+    // Get first item to verify company access
+    if (itemIds.length === 0) return [];
+
+    const firstItem = await this.prisma.actionItem.findUnique({
+      where: { id: itemIds[0] },
+    });
+
+    if (!firstItem) {
+      throw new NotFoundException('Action item not found');
+    }
+
+    await this.verifyCompanyAccess(userId, firstItem.companyId);
+
+    const updates = itemIds.map((itemId, index) =>
+      this.prisma.actionItem.update({
+        where: { id: itemId },
+        data: { order: index },
+        include: {
+          assignee: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              imageUrl: true,
+            },
+          },
+          createdBy: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              imageUrl: true,
+            },
+          },
+          company: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      }),
+    );
+
+    const items = await this.prisma.$transaction(updates);
+
+    // Emit socket event
+    try {
+      this.meetingsGateway?.emitToMeeting(meetingId, 'actionItem:reordered', { itemIds });
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to emit actionItem:reordered event: ${errorMessage}`);
+    }
+
+    return items;
   }
 
   // Helper method to auto-mark items as overdue

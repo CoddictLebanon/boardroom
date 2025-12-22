@@ -11,7 +11,8 @@ test('debug forms', async ({ page }) => {
     const companyCard = page.locator('[class*="cursor-pointer"]').filter({
       has: page.locator('h3'),
     }).first();
-    await companyCard.click();
+    await companyCard.waitFor({ state: 'visible', timeout: 10000 });
+    await companyCard.click({ timeout: 10000 });
     await page.waitForURL(/\/companies\/[\w-]+\/dashboard/, { timeout: 10000 });
     url = page.url();
     match = url.match(/\/companies\/([\w-]+)/);
