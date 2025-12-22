@@ -10,6 +10,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<MemberRole, string[]> = {
   ADMIN: [
     // Full access except members.change_roles
     'meetings.view',
+    'meetings.view_all',
     'meetings.create',
     'meetings.edit',
     'meetings.delete',

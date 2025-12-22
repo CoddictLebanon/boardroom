@@ -2,7 +2,8 @@ import { PrismaClient } from '@prisma/client';
 
 export const PERMISSIONS = [
   // Meetings
-  { code: 'meetings.view', area: 'meetings', action: 'view', description: 'View meetings' },
+  { code: 'meetings.view', area: 'meetings', action: 'view', description: 'View meetings you are invited to' },
+  { code: 'meetings.view_all', area: 'meetings', action: 'view_all', description: 'View all meetings in the company' },
   { code: 'meetings.create', area: 'meetings', action: 'create', description: 'Create meetings' },
   { code: 'meetings.edit', area: 'meetings', action: 'edit', description: 'Edit meetings' },
   { code: 'meetings.delete', area: 'meetings', action: 'delete', description: 'Delete meetings' },

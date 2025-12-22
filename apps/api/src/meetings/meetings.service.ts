@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { MeetingsGateway } from '../gateway/meetings.gateway';
+import { PermissionsService } from '../permissions/permissions.service';
 import {
   CreateMeetingDto,
   UpdateMeetingDto,
@@ -28,6 +29,7 @@ export class MeetingsService {
     private prisma: PrismaService,
     private emailService: EmailService,
     private meetingsGateway: MeetingsGateway,
+    private permissionsService: PermissionsService,
   ) {
     this.logger.log(`MeetingsService initialized, gateway injected: ${!!this.meetingsGateway}`);
   }
@@ -99,8 +101,15 @@ export class MeetingsService {
       companyId,
     };
 
-    // Owners can see all meetings, others only see meetings they're attending
-    if (member.role !== 'OWNER') {
+    // Check if user has permission to view all meetings
+    const canViewAll = await this.permissionsService.hasPermission(
+      userId,
+      companyId,
+      'meetings.view_all',
+    );
+
+    // If no view_all permission, only show meetings they're attending
+    if (!canViewAll) {
       where.attendees = {
         some: {
           memberId: member.id,
@@ -287,8 +296,15 @@ export class MeetingsService {
     // Verify user is a member of the company
     const member = await this.verifyCompanyMember(meeting.companyId, userId);
 
-    // Owners can access all meetings, others must be attendees
-    if (member.role !== 'OWNER') {
+    // Check if user has permission to view all meetings
+    const canViewAll = await this.permissionsService.hasPermission(
+      userId,
+      meeting.companyId,
+      'meetings.view_all',
+    );
+
+    // If no view_all permission, must be an attendee
+    if (!canViewAll) {
       const isAttendee = meeting.attendees.some(
         (attendee) => attendee.memberId === member.id,
       );
