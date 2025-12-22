@@ -47,9 +47,12 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
     const initSocket = async () => {
       try {
         const token = await getToken();
+        console.log("[Socket] Initializing socket connection to:", `${SOCKET_URL}/meetings`);
+        console.log("[Socket] Token available:", !!token);
 
         if (!token) {
           setError("No authentication token available");
+          console.error("[Socket] No token available");
           return;
         }
 
@@ -64,24 +67,31 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         });
 
         newSocket.on("connect", () => {
+          console.log("[Socket] Connected successfully! Socket ID:", newSocket.id);
           setIsConnected(true);
           setError(null);
         });
 
-        newSocket.on("disconnect", () => {
+        newSocket.on("disconnect", (reason) => {
+          console.log("[Socket] Disconnected. Reason:", reason);
           setIsConnected(false);
         });
 
         newSocket.on("connect_error", (err) => {
+          console.error("[Socket] Connection error:", err.message);
           setError(err.message);
-          console.error("Socket connection error:", err);
+        });
+
+        // Debug: log all incoming events
+        newSocket.onAny((eventName, ...args) => {
+          console.log("[Socket] Received event:", eventName, args);
         });
 
         setSocket(newSocket);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Socket initialization failed";
         setError(errorMessage);
-        console.error("Socket initialization error:", err);
+        console.error("[Socket] Initialization error:", err);
       }
     };
 

@@ -161,21 +161,34 @@ export function useMeetingSocket(meetingId: string | null) {
 
   // Join meeting room
   const joinMeeting = useCallback(async () => {
-    if (!socket || !meetingId || !isConnected) return;
+    console.log("[MeetingSocket] joinMeeting called:", {
+      hasSocket: !!socket,
+      meetingId,
+      isConnected
+    });
+
+    if (!socket || !meetingId || !isConnected) {
+      console.log("[MeetingSocket] Cannot join - missing requirements");
+      return;
+    }
 
     try {
+      console.log("[MeetingSocket] Emitting meeting:join for", meetingId);
       socket.emit("meeting:join", { meetingId }, (response: any) => {
+        console.log("[MeetingSocket] meeting:join response:", response);
         if (response?.success) {
           setIsInMeeting(true);
           setCurrentAttendees(response.currentAttendees || []);
           setMeetingError(null);
         } else {
           const error = response?.error || "Failed to join meeting";
+          console.error("[MeetingSocket] Failed to join:", error);
           setMeetingError(error);
         }
       });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to join meeting";
+      console.error("[MeetingSocket] Exception joining:", errorMessage);
       setMeetingError(errorMessage);
     }
   }, [socket, meetingId, isConnected]);
