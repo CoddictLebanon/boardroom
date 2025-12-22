@@ -1198,10 +1198,10 @@ export default function LiveMeetingPage({
               <div className="space-y-4">
                 {decisions.map((decision) => {
                   const votes = decision.votes || [];
-                  const forVotes = votes.filter((v) => v.vote === "FOR").length;
-                  const againstVotes = votes.filter((v) => v.vote === "AGAINST").length;
-                  const abstainVotes = votes.filter((v) => v.vote === "ABSTAIN").length;
-                  const myVote = votes.find((v) => v.userId === currentUser?.id);
+                  const forVotes = votes.filter((v: { vote: string }) => v.vote === "FOR").length;
+                  const againstVotes = votes.filter((v: { vote: string }) => v.vote === "AGAINST").length;
+                  const abstainVotes = votes.filter((v: { vote: string }) => v.vote === "ABSTAIN").length;
+                  const myVote = votes.find((v: { userId: string; vote: string }) => v.userId === currentUser?.id);
                   const isOpenForVoting = !decision.outcome;
                   const isCurrentUserAttendee = attendees.some((a) => a.member?.userId === currentUser?.id && a.isPresent);
 
