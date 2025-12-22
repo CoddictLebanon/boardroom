@@ -16,6 +16,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<MemberRole, string[]> = {
     'meetings.delete',
     'meetings.start_live',
     'action_items.view',
+    'action_items.view_all',
     'action_items.create',
     'action_items.edit',
     'action_items.delete',

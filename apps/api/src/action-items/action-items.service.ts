@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MeetingsGateway } from '../gateway/meetings.gateway';
+import { PermissionsService } from '../permissions/permissions.service';
 import { CreateActionItemDto, UpdateActionItemDto, UpdateActionItemStatusDto } from './dto';
 import { ActionStatus, Priority, Prisma } from '@prisma/client';
 
@@ -10,6 +11,7 @@ export class ActionItemsService {
 
   constructor(
     private prisma: PrismaService,
+    private permissionsService: PermissionsService,
     @Optional() private meetingsGateway?: MeetingsGateway,
   ) {}
 
@@ -100,11 +102,34 @@ export class ActionItemsService {
     },
   ) {
     // Verify user has access to the company
-    await this.verifyCompanyAccess(userId, companyId);
+    const membership = await this.verifyCompanyAccess(userId, companyId);
+
+    // Check if user has permission to view all action items
+    const canViewAll = await this.permissionsService.hasPermission(
+      userId,
+      companyId,
+      'action_items.view_all',
+    );
 
     const where: Prisma.ActionItemWhereInput = {
       companyId,
     };
+
+    // If no view_all permission, filter to only relevant action items
+    if (!canViewAll) {
+      // Get meetings where user is an attendee
+      const attendedMeetings = await this.prisma.meetingAttendee.findMany({
+        where: { memberId: membership.id },
+        select: { meetingId: true },
+      });
+      const attendedMeetingIds = attendedMeetings.map((m) => m.meetingId);
+
+      where.OR = [
+        { assigneeId: userId }, // Assigned to them
+        { createdById: userId }, // Created by them
+        { meetingId: { in: attendedMeetingIds } }, // From meetings they attend
+      ];
+    }
 
     if (filters?.status) {
       where.status = filters.status;
@@ -259,7 +284,36 @@ export class ActionItemsService {
     }
 
     // Verify user has access to the company
-    await this.verifyCompanyAccess(userId, actionItem.companyId);
+    const membership = await this.verifyCompanyAccess(userId, actionItem.companyId);
+
+    // Check if user has permission to view all action items
+    const canViewAll = await this.permissionsService.hasPermission(
+      userId,
+      actionItem.companyId,
+      'action_items.view_all',
+    );
+
+    // If no view_all permission, check if user is involved
+    if (!canViewAll) {
+      const isAssignee = actionItem.assigneeId === userId;
+      const isCreator = actionItem.createdById === userId;
+
+      // Check if user is attendee of the associated meeting
+      let isAttendee = false;
+      if (actionItem.meetingId) {
+        const attendance = await this.prisma.meetingAttendee.findFirst({
+          where: {
+            meetingId: actionItem.meetingId,
+            memberId: membership.id,
+          },
+        });
+        isAttendee = !!attendance;
+      }
+
+      if (!isAssignee && !isCreator && !isAttendee) {
+        throw new ForbiddenException('Access denied: You are not involved in this action item');
+      }
+    }
 
     // Auto-update if overdue
     const updated = await this.checkAndUpdateOverdue(actionItem);

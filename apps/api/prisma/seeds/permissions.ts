@@ -10,7 +10,8 @@ export const PERMISSIONS = [
   { code: 'meetings.start_live', area: 'meetings', action: 'start_live', description: 'Start live meeting sessions' },
 
   // Action Items
-  { code: 'action_items.view', area: 'action_items', action: 'view', description: 'View action items' },
+  { code: 'action_items.view', area: 'action_items', action: 'view', description: 'View action items you are involved in' },
+  { code: 'action_items.view_all', area: 'action_items', action: 'view_all', description: 'View all action items in the company' },
   { code: 'action_items.create', area: 'action_items', action: 'create', description: 'Create action items' },
   { code: 'action_items.edit', area: 'action_items', action: 'edit', description: 'Edit action items' },
   { code: 'action_items.delete', area: 'action_items', action: 'delete', description: 'Delete action items' },
