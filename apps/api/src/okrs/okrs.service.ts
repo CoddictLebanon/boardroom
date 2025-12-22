@@ -16,7 +16,7 @@ import { OkrPeriodStatus, MetricType, Prisma } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 
 // Types for progress calculation
-interface KeyResultWithProgress {
+export interface KeyResultWithProgress {
   id: string;
   objectiveId: string;
   title: string;
@@ -32,7 +32,7 @@ interface KeyResultWithProgress {
   progress: number;
 }
 
-interface ObjectiveWithProgress {
+export interface ObjectiveWithProgress {
   id: string;
   periodId: string;
   title: string;
@@ -43,7 +43,7 @@ interface ObjectiveWithProgress {
   progress: number;
 }
 
-interface OkrPeriodWithProgress {
+export interface OkrPeriodWithProgress {
   id: string;
   companyId: string;
   name: string;

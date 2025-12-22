@@ -10,7 +10,7 @@ import {
 } from '@nestjs/websockets';
 import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
-import { createClerkClient } from '@clerk/backend';
+import { verifyToken } from '@clerk/backend';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -49,7 +49,6 @@ export class MeetingsGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {
   private readonly logger = new Logger(MeetingsGateway.name);
-  private readonly clerkClient;
   private server: Server;
 
   // Track users in each meeting room
@@ -58,11 +57,7 @@ export class MeetingsGateway
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
-  ) {
-    this.clerkClient = createClerkClient({
-      secretKey: this.configService.get<string>('CLERK_SECRET_KEY'),
-    });
-  }
+  ) {}
 
   afterInit(server: Server) {
     this.server = server;
@@ -78,7 +73,9 @@ export class MeetingsGateway
         return;
       }
 
-      const verifiedToken = await this.clerkClient.verifyToken(token);
+      const verifiedToken = await verifyToken(token, {
+        secretKey: this.configService.get<string>('CLERK_SECRET_KEY'),
+      });
       client.userId = verifiedToken.sub;
       client.sessionId = verifiedToken.sid;
 
