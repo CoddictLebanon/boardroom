@@ -154,7 +154,7 @@ export interface ActionItemReorderedEvent {
 }
 
 export function useMeetingSocket(meetingId: string | null) {
-  const { socket, isConnected, error } = useSocket();
+  const { socket, isConnected, isAuthenticated, error } = useSocket();
   const [isInMeeting, setIsInMeeting] = useState(false);
   const [currentAttendees, setCurrentAttendees] = useState<string[]>([]);
   const [meetingError, setMeetingError] = useState<string | null>(null);
@@ -164,10 +164,11 @@ export function useMeetingSocket(meetingId: string | null) {
     console.log("[MeetingSocket] joinMeeting called:", {
       hasSocket: !!socket,
       meetingId,
-      isConnected
+      isConnected,
+      isAuthenticated
     });
 
-    if (!socket || !meetingId || !isConnected) {
+    if (!socket || !meetingId || !isConnected || !isAuthenticated) {
       console.log("[MeetingSocket] Cannot join - missing requirements");
       return;
     }
@@ -191,7 +192,7 @@ export function useMeetingSocket(meetingId: string | null) {
       console.error("[MeetingSocket] Exception joining:", errorMessage);
       setMeetingError(errorMessage);
     }
-  }, [socket, meetingId, isConnected]);
+  }, [socket, meetingId, isConnected, isAuthenticated]);
 
   // Leave meeting room
   const leaveMeeting = useCallback(() => {
@@ -479,18 +480,19 @@ export function useMeetingSocket(meetingId: string | null) {
     [socket]
   );
 
-  // Auto-join meeting when connected - inline logic to avoid closure issues
+  // Auto-join meeting when authenticated - wait for backend auth before joining
   useEffect(() => {
     console.log("[MeetingSocket] Auto-join effect running:", {
       meetingId,
       isConnected,
+      isAuthenticated,
       isInMeeting,
       hasSocket: !!socket,
     });
 
-    // Reset state if disconnected
-    if (!isConnected) {
-      console.log("[MeetingSocket] Not connected, resetting isInMeeting");
+    // Reset state if disconnected or not authenticated
+    if (!isConnected || !isAuthenticated) {
+      console.log("[MeetingSocket] Not connected/authenticated, resetting isInMeeting");
       setIsInMeeting(false);
       setCurrentAttendees([]);
       return;
@@ -513,7 +515,7 @@ export function useMeetingSocket(meetingId: string | null) {
         }
       });
     }
-  }, [meetingId, socket, isConnected, isInMeeting]);
+  }, [meetingId, socket, isConnected, isAuthenticated, isInMeeting]);
 
   // Cleanup: leave meeting on unmount
   useEffect(() => {

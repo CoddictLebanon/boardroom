@@ -7,12 +7,14 @@ import { useAuth } from "@clerk/nextjs";
 interface SocketContextType {
   socket: Socket | null;
   isConnected: boolean;
+  isAuthenticated: boolean;
   error: string | null;
 }
 
 const SocketContext = createContext<SocketContextType>({
   socket: null,
   isConnected: false,
+  isAuthenticated: false,
   error: null,
 });
 
@@ -31,6 +33,7 @@ const SOCKET_URL = getSocketUrl();
 export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { getToken, isSignedIn } = useAuth();
 
@@ -40,6 +43,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         socket.disconnect();
         setSocket(null);
         setIsConnected(false);
+        setIsAuthenticated(false);
       }
       return;
     }
@@ -74,9 +78,15 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
           setError(null);
         });
 
+        newSocket.on("authenticated", (data) => {
+          console.log("[Socket] Authenticated! User:", data?.userId);
+          setIsAuthenticated(true);
+        });
+
         newSocket.on("disconnect", (reason) => {
           console.log("[Socket] Disconnected. Reason:", reason);
           setIsConnected(false);
+          setIsAuthenticated(false);
         });
 
         newSocket.on("connect_error", (err) => {
@@ -107,7 +117,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   }, [isSignedIn, getToken]);
 
   return (
-    <SocketContext.Provider value={{ socket, isConnected, error }}>
+    <SocketContext.Provider value={{ socket, isConnected, isAuthenticated, error }}>
       {children}
     </SocketContext.Provider>
   );

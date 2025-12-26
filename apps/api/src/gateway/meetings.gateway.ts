@@ -71,6 +71,9 @@ export class MeetingsGateway
       this.logger.log(
         `Client ${client.id} connected (User: ${client.userId})`,
       );
+
+      // Emit authenticated event so client knows it's safe to join meetings
+      client.emit('authenticated', { userId: client.userId });
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
