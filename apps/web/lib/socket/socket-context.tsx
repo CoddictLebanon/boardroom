@@ -57,8 +57,10 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
         }
 
         const newSocket = io(`${SOCKET_URL}/meetings`, {
-          auth: {
-            token,
+          auth: async (cb) => {
+            // Get fresh token on each connection/reconnection
+            const freshToken = await getToken();
+            cb({ token: freshToken });
           },
           transports: ["websocket", "polling"],
           reconnection: true,
