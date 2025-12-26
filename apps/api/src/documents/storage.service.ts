@@ -126,10 +126,15 @@ export class StorageService {
 
     // Verify signature
     const expectedSignature = this.generateSignature(key, expires);
-    return crypto.timingSafeEqual(
-      Buffer.from(signature),
-      Buffer.from(expectedSignature),
-    );
+    const signatureBuffer = Buffer.from(signature);
+    const expectedBuffer = Buffer.from(expectedSignature);
+
+    // timingSafeEqual requires same length buffers
+    if (signatureBuffer.length !== expectedBuffer.length) {
+      return false;
+    }
+
+    return crypto.timingSafeEqual(signatureBuffer, expectedBuffer);
   }
 
   getFilePath(key: string): string {
