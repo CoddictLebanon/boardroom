@@ -8,7 +8,11 @@ export class WsValidationPipe implements PipeTransform {
   private readonly logger = new Logger(WsValidationPipe.name);
 
   async transform(value: any, metadata: ArgumentMetadata) {
-    this.logger.log(`WsValidationPipe: type=${metadata.type}, metatype=${metadata.metatype?.name}, value=${JSON.stringify(value)}`);
+    try {
+      this.logger.log(`WsValidationPipe: type=${metadata.type}, metatype=${metadata.metatype?.name}, value=${JSON.stringify(value)}`);
+    } catch {
+      this.logger.log(`WsValidationPipe: type=${metadata.type}, metatype=${metadata.metatype?.name}, value=[circular or unserializable]`);
+    }
 
     // Skip validation for non-body arguments
     if (metadata.type !== 'body') {
