@@ -59,6 +59,7 @@ model Company {
   rolePermissions         RolePermission[]
   customRoles             CustomRole[]
   okrPeriods              OkrPeriod[]
+  orgRoles                OrgRole[]
 }
 
 // Company membership with roles
@@ -707,4 +708,39 @@ enum MetricType {
   PERCENTAGE
   CURRENCY
   BOOLEAN
+}
+
+// ==========================================
+// TEAM / ORG CHART
+// ==========================================
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACTOR
+}
+
+model OrgRole {
+  id              String          @id @default(cuid())
+  companyId       String
+  parentId        String?
+
+  title           String          // Role title (required)
+  personName      String?         // Person name (optional - vacant if null)
+  responsibilities String?        // Markdown text
+  department      String?
+  employmentType  EmploymentType?
+
+  positionX       Float           @default(0)  // Canvas X position
+  positionY       Float           @default(0)  // Canvas Y position
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  parent          OrgRole?        @relation("OrgHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children        OrgRole[]       @relation("OrgHierarchy")
+
+  @@index([companyId])
+  @@index([parentId])
 }

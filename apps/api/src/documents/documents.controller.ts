@@ -127,6 +127,8 @@ export class DocumentsController {
     )
     file: Express.Multer.File,
   ) {
+    console.log('DEBUG: Received DTO:', JSON.stringify(dto, null, 2));
+    console.log('DEBUG: DTO type field:', dto.type, 'typeof:', typeof dto.type);
     return this.documentsService.createDocument(companyId, uploaderId, dto, file);
   }
 

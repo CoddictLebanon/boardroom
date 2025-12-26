@@ -51,6 +51,12 @@ export const PERMISSIONS = [
   { code: 'okrs.edit', area: 'okrs', action: 'edit', description: 'Edit objectives and update key result values' },
   { code: 'okrs.delete', area: 'okrs', action: 'delete', description: 'Delete OKR periods, objectives, and key results' },
   { code: 'okrs.close', area: 'okrs', action: 'close', description: 'Close and reopen OKR periods' },
+
+  // Team/Org Chart
+  { code: 'team.view', area: 'team', action: 'view', description: 'View organization chart' },
+  { code: 'team.create', area: 'team', action: 'create', description: 'Create roles in org chart' },
+  { code: 'team.edit', area: 'team', action: 'edit', description: 'Edit roles in org chart' },
+  { code: 'team.delete', area: 'team', action: 'delete', description: 'Delete roles from org chart' },
 ];
 
 export async function seedPermissions(prisma: PrismaClient) {

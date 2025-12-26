@@ -20,6 +20,7 @@ import { EmailModule } from '../src/email/email.module';
 import { MeetingNotesModule } from '../src/meeting-notes/meeting-notes.module';
 import { GatewayModule } from '../src/gateway/gateway.module';
 import { OkrsModule } from '../src/okrs/okrs.module';
+import { OrgRolesModule } from '../src/org-roles/org-roles.module';
 import { AppController } from '../src/app.controller';
 import { AppService } from '../src/app.service';
 import {
@@ -125,6 +126,7 @@ export async function createTestApp(): Promise<{
       InvitationsModule,
       MeetingNotesModule,
       OkrsModule,
+      OrgRolesModule,
     ],
     controllers: [AppController],
     providers: [

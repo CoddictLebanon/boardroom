@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { format, formatDistanceToNow, isPast } from "date-fns";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -117,6 +118,7 @@ function AttendeeAvatars({ attendees }: { attendees: MeetingAttendee[] }) {
 }
 
 export function MeetingCard({ meeting, companyId, onCancel }: MeetingCardProps) {
+  const router = useRouter();
   const scheduledDate = new Date(meeting.scheduledAt);
   const isUpcoming = scheduledDate > new Date() && meeting.status === "SCHEDULED";
   const isInProgress = meeting.status === "IN_PROGRESS" || meeting.status === "PAUSED";
@@ -130,8 +132,10 @@ export function MeetingCard({ meeting, companyId, onCancel }: MeetingCardProps) 
   const attendeeCount = meeting.attendees?.length || 0;
 
   return (
-    <Card className={`overflow-hidden transition-all hover:shadow-lg border-l-4 ${status.border} group`}>
-      <Link href={basePath} className="block">
+    <Card
+      className={`overflow-hidden transition-all hover:shadow-lg border-l-4 ${status.border} group cursor-pointer`}
+      onClick={() => router.push(basePath)}
+    >
         <div className="p-5">
           {/* Top row: Date badge and status */}
           <div className="flex items-start justify-between mb-3">
@@ -180,7 +184,7 @@ export function MeetingCard({ meeting, companyId, onCancel }: MeetingCardProps) 
             </div>
 
             {/* Status badge and menu */}
-            <div className="flex items-center gap-2" onClick={(e) => e.preventDefault()}>
+            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
               <Badge className={`${status.bg} ${status.color} border-0`}>
                 {status.label}
               </Badge>
@@ -317,7 +321,6 @@ export function MeetingCard({ meeting, companyId, onCancel }: MeetingCardProps) 
             </div>
           </div>
         </div>
-      </Link>
     </Card>
   );
 }

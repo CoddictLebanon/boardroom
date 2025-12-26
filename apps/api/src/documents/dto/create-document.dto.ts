@@ -1,4 +1,5 @@
-import { IsString, IsOptional, IsEnum, IsArray, MaxLength, IsUUID, ArrayMaxSize } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsArray, MaxLength, IsUUID, ArrayMaxSize, IsIn } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { DocumentType } from '@prisma/client';
 
@@ -15,19 +16,18 @@ export class CreateDocumentDto {
   description?: string;
 
   @ApiProperty({ enum: DocumentType, description: 'Document type' })
-  @IsEnum(DocumentType)
+  @IsIn(['MEETING', 'FINANCIAL', 'GOVERNANCE', 'GENERAL'])
+  @Transform(({ value }) => value as DocumentType)
   type: DocumentType;
 
   @ApiPropertyOptional({ description: 'Folder ID' })
   @IsString()
   @IsOptional()
-  @IsUUID()
   folderId?: string;
 
   @ApiPropertyOptional({ description: 'Meeting ID to attach this document to' })
   @IsString()
   @IsOptional()
-  @IsUUID()
   meetingId?: string;
 }
 
@@ -52,7 +52,6 @@ export class UpdateDocumentDto {
   @ApiPropertyOptional({ description: 'Folder ID' })
   @IsString()
   @IsOptional()
-  @IsUUID()
   folderId?: string;
 }
 

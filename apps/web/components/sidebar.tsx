@@ -12,6 +12,7 @@ import {
   DollarSign,
   Settings,
   Target,
+  Users,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -46,6 +47,7 @@ export function Sidebar({ companyId }: SidebarProps) {
     { name: "Documents", href: `${basePath}/documents`, icon: FileText, permission: "documents.view" },
     { name: "Financials", href: `${basePath}/financials`, icon: DollarSign, permission: "financials.view" },
     { name: "OKRs", href: `${basePath}/okrs`, icon: Target, permission: "okrs.view" },
+    { name: "Team", href: `${basePath}/team`, icon: Users, permission: "team.view" },
   ];
 
   // Filter navigation based on permissions

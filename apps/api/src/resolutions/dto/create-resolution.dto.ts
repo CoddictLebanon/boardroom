@@ -22,7 +22,6 @@ export class CreateResolutionDto {
 
   @IsString()
   @IsOptional()
-  @IsUUID()
   decisionId?: string;
 
   @IsDateString()

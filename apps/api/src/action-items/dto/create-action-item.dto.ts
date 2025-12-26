@@ -31,11 +31,9 @@ export class CreateActionItemDto {
 
   @IsString()
   @IsOptional()
-  @IsUUID()
   meetingId?: string;
 
   @IsString()
   @IsOptional()
-  @IsUUID()
   agendaItemId?: string;
 }

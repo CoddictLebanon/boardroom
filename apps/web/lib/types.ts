@@ -226,3 +226,43 @@ export interface OkrPeriod {
   objectives?: Objective[];
   score: number;
 }
+
+// Team/Org Chart Types
+export type EmploymentType = 'FULL_TIME' | 'PART_TIME' | 'CONTRACTOR';
+
+export interface OrgRole {
+  id: string;
+  companyId: string;
+  parentId: string | null;
+  title: string;
+  personName: string | null;
+  responsibilities: string | null;
+  department: string | null;
+  employmentType: EmploymentType | null;
+  positionX: number;
+  positionY: number;
+  createdAt: string;
+  updatedAt: string;
+  parent?: { id: string; title: string } | null;
+  children?: { id: string; title: string; personName: string | null }[];
+}
+
+export interface CreateOrgRoleInput {
+  title: string;
+  personName?: string;
+  responsibilities?: string;
+  department?: string;
+  employmentType?: EmploymentType;
+  parentId?: string;
+}
+
+export interface UpdateOrgRoleInput {
+  title?: string;
+  personName?: string | null;
+  responsibilities?: string | null;
+  department?: string | null;
+  employmentType?: EmploymentType | null;
+  parentId?: string | null;
+  positionX?: number;
+  positionY?: number;
+}

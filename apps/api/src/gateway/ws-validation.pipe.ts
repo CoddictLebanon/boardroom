@@ -1,11 +1,15 @@
-import { PipeTransform, Injectable, ArgumentMetadata } from '@nestjs/common';
+import { PipeTransform, Injectable, ArgumentMetadata, Logger } from '@nestjs/common';
 import { WsException } from '@nestjs/websockets';
 import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 
 @Injectable()
 export class WsValidationPipe implements PipeTransform {
+  private readonly logger = new Logger(WsValidationPipe.name);
+
   async transform(value: any, metadata: ArgumentMetadata) {
+    this.logger.log(`WsValidationPipe: type=${metadata.type}, metatype=${metadata.metatype?.name}, value=${JSON.stringify(value)}`);
+
     // Skip validation for non-body arguments
     if (metadata.type !== 'body') {
       return value;
@@ -34,8 +38,11 @@ export class WsValidationPipe implements PipeTransform {
         })
         .join('; ');
 
+      this.logger.error(`Validation failed: ${messages}`);
       throw new WsException(`Validation failed: ${messages}`);
     }
+
+    this.logger.log(`Validation passed for ${metatype.name}`);
 
     return object;
   }

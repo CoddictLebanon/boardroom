@@ -479,12 +479,41 @@ export function useMeetingSocket(meetingId: string | null) {
     [socket]
   );
 
-  // Auto-join meeting when connected
+  // Auto-join meeting when connected - inline logic to avoid closure issues
   useEffect(() => {
-    if (meetingId && isConnected && !isInMeeting) {
-      joinMeeting();
+    console.log("[MeetingSocket] Auto-join effect running:", {
+      meetingId,
+      isConnected,
+      isInMeeting,
+      hasSocket: !!socket,
+    });
+
+    // Reset state if disconnected
+    if (!isConnected) {
+      console.log("[MeetingSocket] Not connected, resetting isInMeeting");
+      setIsInMeeting(false);
+      setCurrentAttendees([]);
+      return;
     }
-  }, [meetingId, isConnected, isInMeeting, joinMeeting]);
+
+    // Only join if we have everything we need and aren't already in meeting
+    if (meetingId && socket && !isInMeeting) {
+      console.log("[MeetingSocket] Attempting to join meeting:", meetingId);
+
+      socket.emit("meeting:join", { meetingId }, (response: any) => {
+        console.log("[MeetingSocket] meeting:join response:", response);
+        if (response?.success) {
+          setIsInMeeting(true);
+          setCurrentAttendees(response.currentAttendees || []);
+          setMeetingError(null);
+        } else {
+          const error = response?.error || "Failed to join meeting";
+          console.error("[MeetingSocket] Failed to join:", error);
+          setMeetingError(error);
+        }
+      });
+    }
+  }, [meetingId, socket, isConnected, isInMeeting]);
 
   // Cleanup: leave meeting on unmount
   useEffect(() => {

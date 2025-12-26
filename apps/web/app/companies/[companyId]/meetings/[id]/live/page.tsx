@@ -301,9 +301,11 @@ interface SortableAgendaItemProps {
   item: any;
   index: number;
   isActive: boolean;
+  onEdit: (item: any) => void;
+  onDelete: (item: any) => void;
 }
 
-function SortableAgendaItem({ item, index, isActive }: SortableAgendaItemProps) {
+function SortableAgendaItem({ item, index, isActive, onEdit, onDelete }: SortableAgendaItemProps) {
   const {
     attributes,
     listeners,
@@ -358,6 +360,28 @@ function SortableAgendaItem({ item, index, isActive }: SortableAgendaItemProps) 
           )}
         </div>
       </div>
+      {isActive && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => onEdit(item)}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="text-destructive"
+              onClick={() => onDelete(item)}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </div>
   );
 }
@@ -371,6 +395,8 @@ interface SortableDecisionProps {
   isCastingVote: boolean;
   onCastVote: (decisionId: string, vote: VoteType) => void;
   onFinalizeVote: (decisionId: string, outcome: "PASSED" | "REJECTED") => void;
+  onEdit: (decision: any) => void;
+  onDelete: (decision: any) => void;
 }
 
 function SortableDecision({
@@ -381,6 +407,8 @@ function SortableDecision({
   isCastingVote,
   onCastVote,
   onFinalizeVote,
+  onEdit,
+  onDelete,
 }: SortableDecisionProps) {
   const {
     attributes,
@@ -438,16 +466,40 @@ function SortableDecision({
             )}
           </div>
         </div>
-        <Badge
-          variant={decision.outcome === "PASSED" ? "default" : "secondary"}
-          className={
-            decision.outcome === "PASSED" ? "bg-green-100 text-green-800" :
-            decision.outcome === "REJECTED" ? "bg-red-100 text-red-800" :
-            "bg-purple-100 text-purple-800"
-          }
-        >
-          {decision.outcome || "Open for Voting"}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge
+            variant={decision.outcome === "PASSED" ? "default" : "secondary"}
+            className={
+              decision.outcome === "PASSED" ? "bg-green-100 text-green-800" :
+              decision.outcome === "REJECTED" ? "bg-red-100 text-red-800" :
+              "bg-purple-100 text-purple-800"
+            }
+          >
+            {decision.outcome || "Open for Voting"}
+          </Badge>
+          {isActive && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onEdit(decision)}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edit
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-destructive"
+                  onClick={() => onDelete(decision)}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
       </div>
 
       {/* Voting Section */}
@@ -687,6 +739,9 @@ export default function LiveMeetingPage({
   const [voteDialogOpen, setVoteDialogOpen] = useState(false);
   const [voteTitle, setVoteTitle] = useState("");
   const [voteDescription, setVoteDescription] = useState("");
+  const [decisionToEdit, setDecisionToEdit] = useState<any | null>(null);
+  const [decisionToDelete, setDecisionToDelete] = useState<any | null>(null);
+  const [isDeletingDecision, setIsDeletingDecision] = useState(false);
 
   // Agenda item state
   const [agendaDialogOpen, setAgendaDialogOpen] = useState(false);
@@ -694,6 +749,9 @@ export default function LiveMeetingPage({
   const [agendaDescription, setAgendaDescription] = useState("");
   const [agendaDuration, setAgendaDuration] = useState("");
   const [isSubmittingAgenda, setIsSubmittingAgenda] = useState(false);
+  const [agendaToEdit, setAgendaToEdit] = useState<any | null>(null);
+  const [agendaToDelete, setAgendaToDelete] = useState<any | null>(null);
+  const [isDeletingAgenda, setIsDeletingAgenda] = useState(false);
   const [includeVoting, setIncludeVoting] = useState(true);
   const [isSubmittingVote, setIsSubmittingVote] = useState(false);
   const [isCastingVote, setIsCastingVote] = useState(false);
@@ -742,6 +800,8 @@ export default function LiveMeetingPage({
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [documentName, setDocumentName] = useState("");
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);
+  const [documentToDelete, setDocumentToDelete] = useState<MeetingDocument | null>(null);
+  const [isDeletingDocument, setIsDeletingDocument] = useState(false);
 
   // Load company members for action item assignment
   useEffect(() => {
@@ -1259,6 +1319,68 @@ export default function LiveMeetingPage({
     }
   };
 
+  const handleUpdateAgendaItem = async () => {
+    if (!agendaToEdit || !agendaTitle.trim()) return;
+    try {
+      setIsSubmittingAgenda(true);
+      const token = await getToken();
+      const response = await fetch(`${API_URL}/companies/${companyId}/meetings/${id}/agenda/${agendaToEdit.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: agendaTitle.trim(),
+          description: agendaDescription.trim() || undefined,
+          duration: agendaDuration ? parseInt(agendaDuration, 10) : undefined,
+        }),
+      });
+      if (!response.ok) throw new Error("Failed to update agenda item");
+
+      setAgendaDialogOpen(false);
+      setAgendaToEdit(null);
+      resetAgendaForm();
+      // Socket event will handle updating the agenda item in the list
+    } catch (error) {
+      console.error("Error updating agenda item:", error);
+      alert("Failed to update agenda item. Please try again.");
+    } finally {
+      setIsSubmittingAgenda(false);
+    }
+  };
+
+  const handleDeleteAgendaItem = async () => {
+    if (!agendaToDelete) return;
+    try {
+      setIsDeletingAgenda(true);
+      const token = await getToken();
+      const response = await fetch(`${API_URL}/companies/${companyId}/meetings/${id}/agenda/${agendaToDelete.id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) throw new Error("Failed to delete agenda item");
+
+      setAgendaToDelete(null);
+      // Socket event will handle removing the agenda item from the list
+    } catch (error) {
+      console.error("Error deleting agenda item:", error);
+      alert("Failed to delete agenda item. Please try again.");
+    } finally {
+      setIsDeletingAgenda(false);
+    }
+  };
+
+  const openEditAgendaDialog = (item: any) => {
+    setAgendaToEdit(item);
+    setAgendaTitle(item.title);
+    setAgendaDescription(item.description || "");
+    setAgendaDuration(item.duration?.toString() || "");
+    setAgendaDialogOpen(true);
+  };
+
   const handleCreateDecision = async () => {
     if (!voteTitle.trim()) return;
     try {
@@ -1288,6 +1410,7 @@ export default function LiveMeetingPage({
       }
 
       setVoteDialogOpen(false);
+      setDecisionToEdit(null);
       resetVoteForm();
       // Socket event will handle adding the decision to the list
     } catch (error) {
@@ -1296,6 +1419,60 @@ export default function LiveMeetingPage({
     } finally {
       setIsSubmittingVote(false);
     }
+  };
+
+  const handleUpdateDecision = async () => {
+    if (!decisionToEdit || !voteTitle.trim()) return;
+    try {
+      setIsSubmittingVote(true);
+      const token = await getToken();
+      const response = await fetch(`${API_URL}/companies/${companyId}/meetings/${id}/decisions/${decisionToEdit.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: voteTitle.trim(),
+          description: voteDescription.trim() || undefined,
+        }),
+      });
+      if (!response.ok) throw new Error("Failed to update decision");
+      setVoteDialogOpen(false);
+      setDecisionToEdit(null);
+      resetVoteForm();
+    } catch (error) {
+      console.error("Error updating decision:", error);
+      alert("Failed to update decision. Please try again.");
+    } finally {
+      setIsSubmittingVote(false);
+    }
+  };
+
+  const handleDeleteDecision = async () => {
+    if (!decisionToDelete) return;
+    try {
+      setIsDeletingDecision(true);
+      const token = await getToken();
+      const response = await fetch(`${API_URL}/companies/${companyId}/meetings/${id}/decisions/${decisionToDelete.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error("Failed to delete decision");
+      setDecisionToDelete(null);
+    } catch (error) {
+      console.error("Error deleting decision:", error);
+      alert("Failed to delete decision. Please try again.");
+    } finally {
+      setIsDeletingDecision(false);
+    }
+  };
+
+  const openEditDecisionDialog = (decision: any) => {
+    setDecisionToEdit(decision);
+    setVoteTitle(decision.title);
+    setVoteDescription(decision.description || "");
+    setVoteDialogOpen(true);
   };
 
   const handleCastVote = async (decisionId: string, vote: VoteType) => {
@@ -1510,7 +1687,7 @@ export default function LiveMeetingPage({
       const formData = new FormData();
       formData.append("file", documentFile);
       formData.append("name", documentName.trim() || documentFile.name);
-      formData.append("type", "MEETING_MATERIAL");
+      formData.append("type", "MEETING");
       formData.append("meetingId", id);
 
       const response = await fetch(`${API_URL}/companies/${companyId}/documents`, {
@@ -1573,6 +1750,26 @@ export default function LiveMeetingPage({
     } catch (error) {
       console.error("Error viewing document:", error);
       alert("Failed to open document. Please try again.");
+    }
+  };
+
+  const handleDeleteDocument = async () => {
+    if (!documentToDelete || !companyId) return;
+    try {
+      setIsDeletingDocument(true);
+      const token = await getToken();
+      const response = await fetch(`${API_URL}/companies/${companyId}/documents/${documentToDelete.document.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error("Failed to delete document");
+      setMeetingDocuments((prev) => prev.filter((d) => d.id !== documentToDelete.id));
+      setDocumentToDelete(null);
+    } catch (error) {
+      console.error("Error deleting document:", error);
+      alert("Failed to delete document. Please try again.");
+    } finally {
+      setIsDeletingDocument(false);
     }
   };
 
@@ -1818,6 +2015,8 @@ export default function LiveMeetingPage({
                           item={item}
                           index={index}
                           isActive={isActive}
+                          onEdit={openEditAgendaDialog}
+                          onDelete={setAgendaToDelete}
                         />
                       ))}
                     </div>
@@ -1881,6 +2080,8 @@ export default function LiveMeetingPage({
                           isCastingVote={isCastingVote}
                           onCastVote={handleCastVote}
                           onFinalizeVote={handleFinalizeVote}
+                          onEdit={openEditDecisionDialog}
+                          onDelete={setDecisionToDelete}
                         />
                       ))}
                     </div>
@@ -2100,6 +2301,16 @@ export default function LiveMeetingPage({
                     >
                       <Eye className="h-4 w-4" />
                     </Button>
+                    {isActive && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        onClick={() => setDocumentToDelete(doc)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -2160,11 +2371,19 @@ export default function LiveMeetingPage({
       </AlertDialog>
 
       {/* Decision Dialog */}
-      <Dialog open={voteDialogOpen} onOpenChange={setVoteDialogOpen}>
+      <Dialog open={voteDialogOpen} onOpenChange={(open) => {
+        setVoteDialogOpen(open);
+        if (!open) {
+          resetVoteForm();
+          setDecisionToEdit(null);
+        }
+      }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Decision</DialogTitle>
-            <DialogDescription>Record a decision made during the meeting.</DialogDescription>
+            <DialogTitle>{decisionToEdit ? "Edit Decision" : "Add Decision"}</DialogTitle>
+            <DialogDescription>
+              {decisionToEdit ? "Update the decision details." : "Record a decision made during the meeting."}
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
@@ -2185,25 +2404,30 @@ export default function LiveMeetingPage({
                 onChange={(e) => setVoteDescription(e.target.value)}
               />
             </div>
-            <div className="flex items-center justify-between rounded-lg border p-3">
-              <div>
-                <Label htmlFor="include-voting">Include Voting</Label>
-                <p className="text-sm text-muted-foreground">Allow attendees to vote on this decision</p>
+            {!decisionToEdit && (
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div>
+                  <Label htmlFor="include-voting">Include Voting</Label>
+                  <p className="text-sm text-muted-foreground">Allow attendees to vote on this decision</p>
+                </div>
+                <Switch
+                  id="include-voting"
+                  checked={includeVoting}
+                  onCheckedChange={setIncludeVoting}
+                />
               </div>
-              <Switch
-                id="include-voting"
-                checked={includeVoting}
-                onCheckedChange={setIncludeVoting}
-              />
-            </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setVoteDialogOpen(false)} disabled={isSubmittingVote}>
               Cancel
             </Button>
-            <Button onClick={handleCreateDecision} disabled={isSubmittingVote || !voteTitle.trim()}>
+            <Button
+              onClick={decisionToEdit ? handleUpdateDecision : handleCreateDecision}
+              disabled={isSubmittingVote || !voteTitle.trim()}
+            >
               {isSubmittingVote && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {includeVoting ? "Start Vote" : "Add Decision"}
+              {decisionToEdit ? "Save Changes" : (includeVoting ? "Start Vote" : "Add Decision")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2212,12 +2436,17 @@ export default function LiveMeetingPage({
       {/* Agenda Item Dialog */}
       <Dialog open={agendaDialogOpen} onOpenChange={(open) => {
         setAgendaDialogOpen(open);
-        if (!open) resetAgendaForm();
+        if (!open) {
+          resetAgendaForm();
+          setAgendaToEdit(null);
+        }
       }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Agenda Item</DialogTitle>
-            <DialogDescription>Add a new item to the meeting agenda.</DialogDescription>
+            <DialogTitle>{agendaToEdit ? "Edit Agenda Item" : "Add Agenda Item"}</DialogTitle>
+            <DialogDescription>
+              {agendaToEdit ? "Update the agenda item details." : "Add a new item to the meeting agenda."}
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
@@ -2253,9 +2482,12 @@ export default function LiveMeetingPage({
             <Button variant="outline" onClick={() => setAgendaDialogOpen(false)} disabled={isSubmittingAgenda}>
               Cancel
             </Button>
-            <Button onClick={handleCreateAgendaItem} disabled={isSubmittingAgenda || !agendaTitle.trim()}>
+            <Button
+              onClick={agendaToEdit ? handleUpdateAgendaItem : handleCreateAgendaItem}
+              disabled={isSubmittingAgenda || !agendaTitle.trim()}
+            >
               {isSubmittingAgenda && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Add Item
+              {agendaToEdit ? "Save Changes" : "Add Item"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2513,6 +2745,75 @@ export default function LiveMeetingPage({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Document Confirmation */}
+      <AlertDialog open={!!documentToDelete} onOpenChange={(open) => !open && setDocumentToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Document?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{documentToDelete?.document.name}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingDocument}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteDocument}
+              disabled={isDeletingDocument}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeletingDocument && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Agenda Item Confirmation */}
+      <AlertDialog open={!!agendaToDelete} onOpenChange={(open) => !open && setAgendaToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Agenda Item?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{agendaToDelete?.title}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingAgenda}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteAgendaItem}
+              disabled={isDeletingAgenda}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeletingAgenda && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Decision Confirmation */}
+      <AlertDialog open={!!decisionToDelete} onOpenChange={(open) => !open && setDecisionToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Decision?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{decisionToDelete?.title}"? This will also remove all associated votes. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingDecision}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteDecision}
+              disabled={isDeletingDecision}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeletingDecision && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
     </TooltipProvider>
   );

@@ -1,16 +1,14 @@
-import { IsString, IsNotEmpty, IsBoolean, IsEnum, IsUUID } from 'class-validator';
+import { IsString, IsNotEmpty, IsBoolean, IsEnum } from 'class-validator';
 
 export class JoinMeetingDto {
   @IsString()
   @IsNotEmpty()
-  @IsUUID()
   meetingId: string;
 }
 
 export class LeaveMeetingDto {
   @IsString()
   @IsNotEmpty()
-  @IsUUID()
   meetingId: string;
 }
 
@@ -23,7 +21,6 @@ export enum VoteOption {
 export class CastVoteDto {
   @IsString()
   @IsNotEmpty()
-  @IsUUID()
   decisionId: string;
 
   @IsEnum(VoteOption)
@@ -33,7 +30,6 @@ export class CastVoteDto {
 export class UpdateAttendanceDto {
   @IsString()
   @IsNotEmpty()
-  @IsUUID()
   meetingId: string;
 
   @IsBoolean()
@@ -50,7 +46,6 @@ export enum MeetingStatusOption {
 export class UpdateMeetingStatusDto {
   @IsString()
   @IsNotEmpty()
-  @IsUUID()
   meetingId: string;
 
   @IsEnum(MeetingStatusOption)

@@ -120,7 +120,10 @@ export class MeetingsGateway
     @MessageBody() payload: JoinMeetingDto,
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
+    this.logger.log(`meeting:join received - userId: ${client.userId}, payload: ${JSON.stringify(payload)}`);
+
     if (!client.userId) {
+      this.logger.warn('meeting:join failed: Not authenticated');
       throw new WsException('Not authenticated');
     }
 
@@ -128,7 +131,9 @@ export class MeetingsGateway
 
     // Verify user has access to this meeting
     const hasAccess = await this.verifyMeetingAccess(client.userId, meetingId);
+    this.logger.log(`meeting:join access check - userId: ${client.userId}, meetingId: ${meetingId}, hasAccess: ${hasAccess}`);
     if (!hasAccess) {
+      this.logger.warn(`meeting:join failed: Access denied - userId: ${client.userId}, meetingId: ${meetingId}`);
       throw new WsException('Access denied to this meeting');
     }
 
