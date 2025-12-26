@@ -1067,8 +1067,9 @@ export default function LiveMeetingPage({
           }
         );
         if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
           setAgendaItems((prev) => arrayMove(prev, newIndex, oldIndex));
-          console.error("Failed to reorder agenda items");
+          console.error("Failed to reorder agenda items:", response.status, errorData);
         }
       } catch (error) {
         setAgendaItems((prev) => arrayMove(prev, newIndex, oldIndex));
