@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useEffect, useCallback } from "react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,11 +47,29 @@ import {
   Plus,
   Loader2,
   Upload,
+  GripVertical,
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { useMeeting } from "@/lib/hooks/use-meetings";
 import type { MeetingStatus } from "@/lib/types";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 function getInitials(firstName?: string | null, lastName?: string | null) {
   return `${firstName?.[0] || ""}${lastName?.[0] || ""}`.toUpperCase() || "?";
@@ -78,6 +96,87 @@ const statusLabels: Record<MeetingStatus, string> = {
   COMPLETED: "Completed",
   CANCELLED: "Cancelled",
 };
+
+// Sortable agenda item component for drag-and-drop
+interface SortableAgendaItemProps {
+  item: any;
+  index: number;
+  onEdit: (item: any) => void;
+}
+
+function SortableAgendaItem({ item, index, onEdit }: SortableAgendaItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="flex gap-4 group">
+      <button
+        className="mt-1 cursor-grab touch-none text-muted-foreground hover:text-foreground"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
+        {index + 1}
+      </div>
+      <div className="flex-1">
+        <h4 className="font-medium">{item.title}</h4>
+        {item.description && (
+          <p className="mt-1 text-sm text-muted-foreground">
+            {item.description}
+          </p>
+        )}
+        <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+          {item.duration && (
+            <span className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              {item.duration} min
+            </span>
+          )}
+          {item.createdBy && (
+            <span className="flex items-center gap-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Avatar className="h-4 w-4">
+                    <AvatarImage src={item.createdBy.imageUrl || undefined} />
+                    <AvatarFallback className="text-[8px]">
+                      {getInitials(item.createdBy.firstName, item.createdBy.lastName)}
+                    </AvatarFallback>
+                  </Avatar>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{getFullName(item.createdBy.firstName, item.createdBy.lastName)}</p>
+                </TooltipContent>
+              </Tooltip>
+              Added by {item.createdBy.firstName}
+            </span>
+          )}
+        </div>
+      </div>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="opacity-0 group-hover:opacity-100 transition-opacity"
+        onClick={() => onEdit(item)}
+      >
+        <Edit className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
 
 export default function MeetingDetailPage({
   params,
@@ -118,6 +217,67 @@ export default function MeetingDetailPage({
   const [documentDescription, setDocumentDescription] = useState("");
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);
+
+  // Local agenda items state for drag-and-drop
+  const [localAgendaItems, setLocalAgendaItems] = useState<any[]>([]);
+
+  // Sync local agenda items with meeting data
+  useEffect(() => {
+    if (meeting?.agendaItems) {
+      setLocalAgendaItems(meeting.agendaItems);
+    }
+  }, [meeting?.agendaItems]);
+
+  // dnd-kit sensors for drag-and-drop
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Handle agenda drag end
+  const handleAgendaDragEnd = useCallback(
+    async (event: DragEndEvent) => {
+      const { active, over } = event;
+
+      if (!over || active.id === over.id) return;
+
+      const oldIndex = localAgendaItems.findIndex((a) => a.id === active.id);
+      const newIndex = localAgendaItems.findIndex((a) => a.id === over.id);
+
+      if (oldIndex === -1 || newIndex === -1) return;
+
+      // Optimistically update the local state
+      const newItems = arrayMove(localAgendaItems, oldIndex, newIndex);
+      setLocalAgendaItems(newItems);
+
+      try {
+        const token = await getToken();
+        const response = await fetch(
+          `${API_URL}/companies/${companyId}/meetings/${id}/agenda/reorder`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ itemIds: newItems.map((a) => a.id) }),
+          }
+        );
+        if (!response.ok) {
+          // Rollback on failure
+          setLocalAgendaItems((prev) => arrayMove(prev, newIndex, oldIndex));
+          console.error("Failed to reorder agenda items");
+        }
+      } catch (error) {
+        // Rollback on error
+        setLocalAgendaItems((prev) => arrayMove(prev, newIndex, oldIndex));
+        console.error("Error reordering agenda items:", error);
+      }
+    },
+    [localAgendaItems, companyId, id, getToken]
+  );
 
   const resetAgendaForm = () => {
     setAgendaTitle("");
@@ -558,7 +718,9 @@ export default function MeetingDetailPage({
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-lg">Agenda</CardTitle>
-                <CardDescription>Meeting agenda items</CardDescription>
+                <CardDescription>
+                  {isUpcoming ? "Drag items to reorder" : "Meeting agenda items"}
+                </CardDescription>
               </div>
               {isUpcoming && (
                 <Button size="sm" variant="outline" onClick={openAddAgendaDialog}>
@@ -568,60 +730,74 @@ export default function MeetingDetailPage({
               )}
             </CardHeader>
             <CardContent>
-              {meeting.agendaItems && meeting.agendaItems.length > 0 ? (
-                <div className="space-y-4">
-                  {meeting.agendaItems.map((item, index) => (
-                    <div key={item.id} className="flex gap-4 group">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
-                        {index + 1}
+              {localAgendaItems.length > 0 ? (
+                isUpcoming ? (
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleAgendaDragEnd}
+                  >
+                    <SortableContext
+                      items={localAgendaItems.map((a) => a.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <div className="space-y-4">
+                        {localAgendaItems.map((item, index) => (
+                          <SortableAgendaItem
+                            key={item.id}
+                            item={item}
+                            index={index}
+                            onEdit={openEditAgendaDialog}
+                          />
+                        ))}
                       </div>
-                      <div className="flex-1">
-                        <h4 className="font-medium">{item.title}</h4>
-                        {item.description && (
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {item.description}
-                          </p>
-                        )}
-                        <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-                          {item.duration && (
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {item.duration} min
-                            </span>
+                    </SortableContext>
+                  </DndContext>
+                ) : (
+                  <div className="space-y-4">
+                    {localAgendaItems.map((item, index) => (
+                      <div key={item.id} className="flex gap-4 group">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
+                          {index + 1}
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="font-medium">{item.title}</h4>
+                          {item.description && (
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {item.description}
+                            </p>
                           )}
-                          {item.createdBy && (
-                            <span className="flex items-center gap-1">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Avatar className="h-4 w-4">
-                                    <AvatarImage src={item.createdBy.imageUrl || undefined} />
-                                    <AvatarFallback className="text-[8px]">
-                                      {getInitials(item.createdBy.firstName, item.createdBy.lastName)}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>{getFullName(item.createdBy.firstName, item.createdBy.lastName)}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                              Added by {item.createdBy.firstName}
-                            </span>
-                          )}
+                          <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+                            {item.duration && (
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {item.duration} min
+                              </span>
+                            )}
+                            {item.createdBy && (
+                              <span className="flex items-center gap-1">
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Avatar className="h-4 w-4">
+                                      <AvatarImage src={item.createdBy.imageUrl || undefined} />
+                                      <AvatarFallback className="text-[8px]">
+                                        {getInitials(item.createdBy.firstName, item.createdBy.lastName)}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>{getFullName(item.createdBy.firstName, item.createdBy.lastName)}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                                Added by {item.createdBy.firstName}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
-                      {isUpcoming && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => openEditAgendaDialog(item)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )
               ) : (
                 <div className="py-8 text-center">
                   <FileText className="mx-auto h-8 w-8 text-muted-foreground/50" />
