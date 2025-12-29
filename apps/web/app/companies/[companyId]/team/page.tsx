@@ -544,7 +544,7 @@ function TeamPageContent() {
           <h1 className="text-2xl font-bold tracking-tight">Team</h1>
           <p className="text-muted-foreground">Organization structure</p>
         </div>
-        {canCreate && interactiveMode && (
+        {canCreate && (
           <Button onClick={() => openCreateDialog()}>
             <Plus className="mr-2 h-4 w-4" />
             Add Role
@@ -558,7 +558,7 @@ function TeamPageContent() {
           {roles.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full">
               <p className="text-muted-foreground mb-4">No roles yet. Create your first role to start building your org chart.</p>
-              {canCreate && interactiveMode && (
+              {canCreate && (
                 <Button onClick={() => openCreateDialog()}>
                   <Plus className="mr-2 h-4 w-4" />
                   Add First Role

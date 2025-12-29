@@ -143,7 +143,7 @@ export class PermissionsService {
       include: { permission: true, customRole: true },
     });
 
-    // Group by role (system roles)
+    // Group by role (system roles - exclude OWNER as they have full access)
     const systemRoles: Record<string, Record<string, boolean>> = {
       ADMIN: {},
       BOARD_MEMBER: {},
@@ -151,7 +151,8 @@ export class PermissionsService {
     };
 
     for (const rp of rolePermissions) {
-      if (rp.role && !rp.customRoleId) {
+      // Skip OWNER role - they have full access and don't need permission entries
+      if (rp.role && !rp.customRoleId && rp.role !== 'OWNER') {
         systemRoles[rp.role][rp.permission.code] = rp.granted;
       }
     }
