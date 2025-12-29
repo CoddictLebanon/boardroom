@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Users, Mail, Loader2, UserPlus, X, Clock, MoreHorizontal, UserMinus, ArrowLeft } from "lucide-react";
+import { Users, Mail, Loader2, UserPlus, X, Clock, MoreHorizontal, UserMinus, ArrowLeft, Pencil } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,6 +37,12 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1
 
 type MemberRole = "OWNER" | "ADMIN" | "BOARD_MEMBER" | "OBSERVER";
 
+interface CustomRole {
+  id: string;
+  name: string;
+  description: string | null;
+}
+
 interface Invitation {
   id: string;
   email: string;
@@ -50,6 +56,8 @@ interface Invitation {
 interface Member {
   id: string;
   role: MemberRole;
+  customRoleId: string | null;
+  customRole?: CustomRole | null;
   title: string | null;
   status: string;
   user: {
@@ -69,20 +77,32 @@ export default function MembersPage() {
 
   const canInvite = usePermission("members.invite");
   const canRemove = usePermission("members.remove");
+  const canChangeRoles = usePermission("members.change_roles");
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<MemberRole>("BOARD_MEMBER");
+  const [customRoleId, setCustomRoleId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [customRoles, setCustomRoles] = useState<CustomRole[]>([]);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+
+  // Edit member dialog state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const [editRole, setEditRole] = useState<MemberRole>("BOARD_MEMBER");
+  const [editCustomRoleId, setEditCustomRoleId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [isEditSubmitting, setIsEditSubmitting] = useState(false);
 
   const resetForm = () => {
     setEmail("");
     setRole("BOARD_MEMBER");
+    setCustomRoleId(null);
     setTitle("");
   };
 
@@ -91,11 +111,14 @@ export default function MembersPage() {
       if (showLoading) setIsInitialLoading(true);
       const token = await getToken();
 
-      const [companyRes, invitationsRes] = await Promise.all([
+      const [companyRes, invitationsRes, customRolesRes] = await Promise.all([
         fetch(`${API_URL}/companies/${companyId}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
         fetch(`${API_URL}/companies/${companyId}/invitations`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(`${API_URL}/companies/${companyId}/custom-roles`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
@@ -108,6 +131,11 @@ export default function MembersPage() {
       if (invitationsRes.ok) {
         const invites = await invitationsRes.json();
         setInvitations(invites.filter((i: Invitation) => i.status === "PENDING"));
+      }
+
+      if (customRolesRes.ok) {
+        const roles = await customRolesRes.json();
+        setCustomRoles(roles || []);
       }
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -138,6 +166,7 @@ export default function MembersPage() {
           body: JSON.stringify({
             email: email.trim(),
             role,
+            customRoleId: customRoleId || undefined,
             title: title.trim() || undefined,
           }),
         }
@@ -222,13 +251,61 @@ export default function MembersPage() {
     }
   };
 
-  const formatRole = (role: MemberRole) => {
+  const formatRole = (role: MemberRole, customRole?: CustomRole | null) => {
+    if (customRole) return customRole.name;
     switch (role) {
       case "OWNER": return "Owner";
       case "ADMIN": return "Admin";
       case "BOARD_MEMBER": return "Board Member";
       case "OBSERVER": return "Observer";
       default: return role;
+    }
+  };
+
+  const openEditMemberDialog = (member: Member) => {
+    setEditingMember(member);
+    setEditRole(member.role);
+    setEditCustomRoleId(member.customRoleId);
+    setEditTitle(member.title || "");
+    setEditDialogOpen(true);
+  };
+
+  const handleEditMember = async () => {
+    if (!editingMember) return;
+
+    try {
+      setIsEditSubmitting(true);
+      const token = await getToken();
+
+      const response = await fetch(
+        `${API_URL}/companies/${companyId}/members/${editingMember.id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            role: editRole,
+            customRoleId: editCustomRoleId || undefined,
+            title: editTitle.trim() || undefined,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to update member");
+      }
+
+      setEditDialogOpen(false);
+      setEditingMember(null);
+      fetchData(false);
+    } catch (error) {
+      console.error("Error updating member:", error);
+      alert(error instanceof Error ? error.message : "Failed to update member");
+    } finally {
+      setIsEditSubmitting(false);
     }
   };
 
@@ -327,7 +404,7 @@ export default function MembersPage() {
                     <div>
                       <p className="font-medium">{invitation.email}</p>
                       <p className="text-sm text-muted-foreground">
-                        {formatRole(invitation.role)} {invitation.title && `• ${invitation.title}`}
+                        {formatRole(invitation.role, null)} {invitation.title && `• ${invitation.title}`}
                       </p>
                     </div>
                   </div>
@@ -408,8 +485,8 @@ export default function MembersPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge variant={getRoleBadgeVariant(member.role)}>{formatRole(member.role)}</Badge>
-                    {canRemove && member.role !== "OWNER" && (
+                    <Badge variant={getRoleBadgeVariant(member.role)}>{formatRole(member.role, member.customRole)}</Badge>
+                    {member.role !== "OWNER" && (canChangeRoles || canRemove) && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -417,16 +494,24 @@ export default function MembersPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            className="text-red-600"
-                            onClick={() => handleRemoveMember(
-                              member.id,
-                              `${member.user.firstName} ${member.user.lastName}`.trim() || member.user.email
-                            )}
-                          >
-                            <UserMinus className="mr-2 h-4 w-4" />
-                            Remove from company
-                          </DropdownMenuItem>
+                          {canChangeRoles && (
+                            <DropdownMenuItem onClick={() => openEditMemberDialog(member)}>
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Edit role & title
+                            </DropdownMenuItem>
+                          )}
+                          {canRemove && (
+                            <DropdownMenuItem
+                              className="text-red-600"
+                              onClick={() => handleRemoveMember(
+                                member.id,
+                                `${member.user.firstName} ${member.user.lastName}`.trim() || member.user.email
+                              )}
+                            >
+                              <UserMinus className="mr-2 h-4 w-4" />
+                              Remove from company
+                            </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     )}
@@ -463,7 +548,20 @@ export default function MembersPage() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="role">Role</Label>
-              <Select value={role} onValueChange={(v) => setRole(v as MemberRole)}>
+              <Select
+                value={customRoleId || role}
+                onValueChange={(v) => {
+                  // Check if it's a custom role ID
+                  const isCustomRole = customRoles.some(cr => cr.id === v);
+                  if (isCustomRole) {
+                    setCustomRoleId(v);
+                    setRole("BOARD_MEMBER"); // Default system role when custom role is selected
+                  } else {
+                    setRole(v as MemberRole);
+                    setCustomRoleId(null);
+                  }
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -471,6 +569,16 @@ export default function MembersPage() {
                   <SelectItem value="ADMIN">Admin</SelectItem>
                   <SelectItem value="BOARD_MEMBER">Board Member</SelectItem>
                   <SelectItem value="OBSERVER">Observer</SelectItem>
+                  {customRoles.length > 0 && (
+                    <>
+                      <div className="my-1 border-t" />
+                      {customRoles.map((cr) => (
+                        <SelectItem key={cr.id} value={cr.id}>
+                          {cr.name}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -492,6 +600,73 @@ export default function MembersPage() {
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               <Mail className="mr-2 h-4 w-4" />
               Send Invitation
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Member Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Member</DialogTitle>
+            <DialogDescription>
+              Update role and title for {editingMember?.user.firstName} {editingMember?.user.lastName}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="edit-role">Role</Label>
+              <Select
+                value={editCustomRoleId || editRole}
+                onValueChange={(v) => {
+                  const isCustomRole = customRoles.some(cr => cr.id === v);
+                  if (isCustomRole) {
+                    setEditCustomRoleId(v);
+                    setEditRole("BOARD_MEMBER");
+                  } else {
+                    setEditRole(v as MemberRole);
+                    setEditCustomRoleId(null);
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ADMIN">Admin</SelectItem>
+                  <SelectItem value="BOARD_MEMBER">Board Member</SelectItem>
+                  <SelectItem value="OBSERVER">Observer</SelectItem>
+                  {customRoles.length > 0 && (
+                    <>
+                      <div className="my-1 border-t" />
+                      {customRoles.map((cr) => (
+                        <SelectItem key={cr.id} value={cr.id}>
+                          {cr.name}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-title">Title (optional)</Label>
+              <Input
+                id="edit-title"
+                placeholder="e.g., Independent Director"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)} disabled={isEditSubmitting}>
+              Cancel
+            </Button>
+            <Button onClick={handleEditMember} disabled={isEditSubmitting}>
+              {isEditSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>

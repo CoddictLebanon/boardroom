@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Loader2, Plus, Trash2, ArrowLeft,
+  Loader2, Plus, Trash2, ArrowLeft, Pencil,
   Calendar, CheckSquare, FileText, FolderOpen,
   DollarSign, Users, Building2, Target
 } from "lucide-react";
@@ -94,6 +94,13 @@ export default function PermissionsPage() {
   const [newRoleName, setNewRoleName] = useState("");
   const [newRoleDescription, setNewRoleDescription] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+
+  // Edit custom role dialog state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
+  const [editRoleName, setEditRoleName] = useState("");
+  const [editRoleDescription, setEditRoleDescription] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
 
   const fetchPermissions = async () => {
     try {
@@ -244,6 +251,53 @@ export default function PermissionsPage() {
     }
   };
 
+  const openEditDialog = (roleId: string) => {
+    const role = data?.customRoles.find((r) => r.id === roleId);
+    if (role) {
+      setEditingRoleId(roleId);
+      setEditRoleName(role.name);
+      setEditRoleDescription(role.description || "");
+      setEditDialogOpen(true);
+    }
+  };
+
+  const handleEditRole = async () => {
+    if (!editingRoleId || !editRoleName.trim()) return;
+
+    try {
+      setIsEditing(true);
+      const token = await getToken();
+
+      const response = await fetch(`${API_URL}/custom-roles/${editingRoleId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: editRoleName.trim(),
+          description: editRoleDescription.trim() || undefined,
+        }),
+      });
+
+      if (response.ok) {
+        setEditDialogOpen(false);
+        setEditingRoleId(null);
+        setEditRoleName("");
+        setEditRoleDescription("");
+        await fetchPermissions();
+      } else {
+        const error = await response.json();
+        alert(error.message || "Failed to update role");
+      }
+    } catch (error) {
+      console.error("Error updating role:", error);
+      alert("Failed to update role. Please try again.");
+    } finally {
+      setIsEditing(false);
+    }
+  };
+
   // Group permissions by area
   const permissionsByArea = data?.allPermissions.reduce((acc, perm) => {
     if (!acc[perm.area]) acc[perm.area] = [];
@@ -327,21 +381,31 @@ export default function PermissionsPage() {
 
         {allTabs.map((tab) => (
           <TabsContent key={tab.key} value={tab.key} className="mt-6">
-            {/* Delete button for custom roles */}
+            {/* Edit and Delete buttons for custom roles */}
             {!["ADMIN", "BOARD_MEMBER", "OBSERVER"].includes(tab.key) && (
-              <div className="mb-4 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 p-4">
+              <div className="mb-4 flex items-center justify-between rounded-lg border p-4">
                 <div>
-                  <p className="font-medium text-red-800">Delete Custom Role</p>
-                  <p className="text-sm text-red-600">This action cannot be undone.</p>
+                  <p className="font-medium">{tab.label}</p>
+                  <p className="text-sm text-muted-foreground">{tab.description}</p>
                 </div>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => handleDeleteRole(tab.key)}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openEditDialog(tab.key)}
+                  >
+                    <Pencil className="mr-2 h-4 w-4" />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => handleDeleteRole(tab.key)}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete
+                  </Button>
+                </div>
               </div>
             )}
 
@@ -425,6 +489,47 @@ export default function PermissionsPage() {
             <Button onClick={handleCreateRole} disabled={isCreating || !newRoleName.trim()}>
               {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Create Role
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Custom Role Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Custom Role</DialogTitle>
+            <DialogDescription>
+              Update the name and description for this role.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="edit-role-name">Role Name</Label>
+              <Input
+                id="edit-role-name"
+                placeholder="e.g., Auditor, Secretary"
+                value={editRoleName}
+                onChange={(e) => setEditRoleName(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-role-description">Description (optional)</Label>
+              <Textarea
+                id="edit-role-description"
+                placeholder="Brief description of this role..."
+                value={editRoleDescription}
+                onChange={(e) => setEditRoleDescription(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleEditRole} disabled={isEditing || !editRoleName.trim()}>
+              {isEditing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>
