@@ -115,6 +115,9 @@ export default function ResolutionsPage() {
   const canEdit = usePermission("resolutions.edit");
   const canDelete = usePermission("resolutions.delete");
   const canChangeStatus = usePermission("resolutions.change_status");
+  const canSign = usePermission("resolutions.sign");
+  const canManageSigners = usePermission("resolutions.manage_signers");
+  const canDownloadPdf = usePermission("resolutions.download_pdf");
 
   const [resolutions, setResolutions] = useState<Resolution[]>([]);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
@@ -938,8 +941,8 @@ export default function ResolutionsPage() {
                     Close
                   </Button>
 
-                  {/* Manage Signers Button - only for users with edit permission and non-passed resolutions */}
-                  {canEdit && selectedResolution.status !== "PASSED" && (
+                  {/* Manage Signers Button - only for users with manage_signers permission and non-passed resolutions */}
+                  {canManageSigners && selectedResolution.status !== "PASSED" && (
                     <Button variant="outline" onClick={handleOpenSignerDialog}>
                       <Users className="mr-2 h-4 w-4" />
                       Manage Signers
@@ -947,23 +950,25 @@ export default function ResolutionsPage() {
                   )}
 
                   {/* Download PDF Button */}
-                  <Button
-                    variant="outline"
-                    onClick={downloadPDF}
-                    disabled={isGeneratingPDF}
-                  >
-                    {isGeneratingPDF ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Download className="mr-2 h-4 w-4" />
-                    )}
-                    Download PDF
-                  </Button>
+                  {canDownloadPdf && (
+                    <Button
+                      variant="outline"
+                      onClick={downloadPDF}
+                      disabled={isGeneratingPDF}
+                    >
+                      {isGeneratingPDF ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Download className="mr-2 h-4 w-4" />
+                      )}
+                      Download PDF
+                    </Button>
+                  )}
                 </div>
 
                 <div className="flex gap-2 w-full sm:w-auto">
-                  {/* Sign Resolution Button - only for pending signers */}
-                  {isCurrentUserPendingSigner && (
+                  {/* Sign Resolution Button - only for users with sign permission who are pending signers */}
+                  {canSign && isCurrentUserPendingSigner && (
                     <Button
                       onClick={handleSignResolution}
                       disabled={isSigningResolution || !userSignatureUrl}
