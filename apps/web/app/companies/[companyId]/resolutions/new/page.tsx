@@ -52,14 +52,20 @@ export default function NewResolutionChatPage() {
     if (!inputValue.trim() || isLoading) return;
 
     const userMessage: Message = { role: "user", content: inputValue.trim() };
-    const updatedMessages = [...messages, userMessage];
-    setMessages(updatedMessages);
+    // Capture current messages before async operations to avoid race conditions
+    const currentMessages = [...messages];
+    const updatedMessages = [...currentMessages, userMessage];
+    setMessages(prev => [...prev, userMessage]);
     setInputValue("");
     setError(null);
     setIsLoading(true);
 
     try {
       const token = await getToken();
+      if (!token) {
+        setError("Authentication required. Please refresh the page.");
+        return;
+      }
       const response = await fetch(`${API_URL}/ai/companies/${companyId}/generate-resolution`, {
         method: "POST",
         headers: {
@@ -82,7 +88,7 @@ export default function NewResolutionChatPage() {
         content: data.content || data.message || "",
       };
 
-      setMessages([...updatedMessages, assistantMessage]);
+      setMessages(prev => [...prev, assistantMessage]);
 
       // Extract resolution content if present
       const resolutionContent = extractResolutionContent(assistantMessage.content);
@@ -153,6 +159,10 @@ export default function NewResolutionChatPage() {
 
     try {
       const token = await getToken();
+      if (!token) {
+        setError("Authentication required. Please refresh the page.");
+        return;
+      }
       const title = extractTitle(currentDraft);
 
       const response = await fetch(`${API_URL}/companies/${companyId}/resolutions`, {
@@ -297,6 +307,7 @@ export default function NewResolutionChatPage() {
             {/* Input Area */}
             <div className="flex gap-2">
               <Textarea
+                id="resolution-chat-input"
                 ref={textareaRef}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
@@ -304,11 +315,13 @@ export default function NewResolutionChatPage() {
                 placeholder="Describe the resolution you need..."
                 className="min-h-[80px] resize-none"
                 disabled={isLoading}
+                aria-label="Chat message input for resolution generation"
               />
               <Button
                 onClick={handleSendMessage}
                 disabled={!inputValue.trim() || isLoading}
                 className="self-end"
+                aria-label="Send message"
               >
                 {isLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
