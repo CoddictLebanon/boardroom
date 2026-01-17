@@ -268,8 +268,27 @@ export class ResolutionsService {
   ) {
     const resolution = await this.findOne(resolutionId);
 
-    if (!resolution) {
-      throw new NotFoundException('Resolution not found');
+    // Prevent modifying signers on passed resolutions
+    if (resolution.status === ResolutionStatus.PASSED) {
+      throw new ForbiddenException('Cannot modify signers on a passed resolution');
+    }
+
+    // Validate that all users are members of the company
+    for (const signer of signers) {
+      const member = await this.prisma.companyMember.findUnique({
+        where: {
+          userId_companyId: {
+            userId: signer.userId,
+            companyId: resolution.companyId,
+          },
+        },
+      });
+
+      if (!member) {
+        throw new BadRequestException(
+          `User ${signer.userId} is not a member of this company`,
+        );
+      }
     }
 
     // Create signature records
@@ -280,23 +299,41 @@ export class ResolutionsService {
       status: 'PENDING' as const,
     }));
 
-    await this.prisma.resolutionSignature.createMany({
-      data: signatureData,
-      skipDuplicates: true,
-    });
-
-    // Update includeStamp if provided
-    if (includeStamp !== undefined) {
-      await this.prisma.resolution.update({
-        where: { id: resolutionId },
-        data: { includeStamp },
+    // Use transaction to ensure atomicity
+    await this.prisma.$transaction(async (tx) => {
+      await tx.resolutionSignature.createMany({
+        data: signatureData,
+        skipDuplicates: true,
       });
-    }
+
+      if (includeStamp !== undefined) {
+        await tx.resolution.update({
+          where: { id: resolutionId },
+          data: { includeStamp },
+        });
+      }
+    });
 
     return this.findOne(resolutionId);
   }
 
   async removeSigner(resolutionId: string, userId: string) {
+    const resolution = await this.findOne(resolutionId);
+
+    // Prevent modifying signers on passed resolutions
+    if (resolution.status === ResolutionStatus.PASSED) {
+      throw new ForbiddenException('Cannot modify signers on a passed resolution');
+    }
+
+    // Check if the signature exists
+    const signature = await this.prisma.resolutionSignature.findUnique({
+      where: { resolutionId_userId: { resolutionId, userId } },
+    });
+
+    if (!signature) {
+      throw new NotFoundException('Signer not found for this resolution');
+    }
+
     await this.prisma.resolutionSignature.delete({
       where: {
         resolutionId_userId: { resolutionId, userId },
@@ -310,6 +347,15 @@ export class ResolutionsService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user?.signatureUrl) {
       throw new BadRequestException('You must upload a signature before signing');
+    }
+
+    // Check if the signature record exists
+    const signature = await this.prisma.resolutionSignature.findUnique({
+      where: { resolutionId_userId: { resolutionId, userId } },
+    });
+
+    if (!signature) {
+      throw new NotFoundException('You are not assigned as a signer for this resolution');
     }
 
     // Update the signature record
