@@ -12,7 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ResolutionsService } from './resolutions.service';
-import { CreateResolutionDto, UpdateResolutionDto } from './dto';
+import { CreateResolutionDto, UpdateResolutionDto, AddSignersDto } from './dto';
 import { ResolutionStatus, ResolutionCategory } from '@prisma/client';
 import { CurrentUser } from '../auth/decorators';
 import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
@@ -103,5 +103,35 @@ export class ResolutionsController {
     @Param('id') id: string,
   ) {
     return this.resolutionsService.remove(id);
+  }
+
+  @Post('companies/:companyId/resolutions/:id/signers')
+  @RequirePermission('resolutions.edit')
+  addSigners(
+    @Param('companyId') companyId: string,
+    @Param('id') id: string,
+    @Body() dto: AddSignersDto,
+  ) {
+    return this.resolutionsService.addSigners(id, dto.signers, dto.includeStamp);
+  }
+
+  @Delete('companies/:companyId/resolutions/:id/signers/:userId')
+  @RequirePermission('resolutions.edit')
+  removeSigner(
+    @Param('companyId') companyId: string,
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+  ) {
+    return this.resolutionsService.removeSigner(id, userId);
+  }
+
+  @Post('companies/:companyId/resolutions/:id/sign')
+  @RequirePermission('resolutions.view')
+  signResolution(
+    @Param('companyId') companyId: string,
+    @Param('id') id: string,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.resolutionsService.signResolution(id, userId);
   }
 }
