@@ -23,6 +23,7 @@ import { CustomRolesModule } from './custom-roles/custom-roles.module';
 import { MeetingNotesModule } from './meeting-notes/meeting-notes.module';
 import { OkrsModule } from './okrs/okrs.module';
 import { OrgRolesModule } from './org-roles/org-roles.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { OrgRolesModule } from './org-roles/org-roles.module';
     MeetingNotesModule,
     OkrsModule,
     OrgRolesModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [
