@@ -218,14 +218,18 @@ export default function ResolutionsPage() {
   };
 
   const handleOpenSignerDialog = async () => {
+    // Capture current value to avoid stale state after async operations
+    const resolution = selectedResolution;
+    if (!resolution) return;
+
     await fetchMembers();
     // Pre-populate selected signers from current resolution signatures
-    if (selectedResolution?.signatures) {
-      setSelectedSigners(selectedResolution.signatures.map(s => s.user.id));
+    if (resolution.signatures) {
+      setSelectedSigners(resolution.signatures.map(s => s.user.id));
     } else {
       setSelectedSigners([]);
     }
-    setIncludeStamp(selectedResolution?.includeStamp || false);
+    setIncludeStamp(resolution.includeStamp || false);
     setSignerDialogOpen(true);
   };
 
@@ -241,16 +245,22 @@ export default function ResolutionsPage() {
       const signersToRemove = currentSignerIds.filter(id => !selectedSigners.includes(id));
 
       for (const signerUserId of signersToRemove) {
-        await fetch(`${API_URL}/companies/${companyId}/resolutions/${selectedResolution.id}/signers/${signerUserId}`, {
+        const response = await fetch(`${API_URL}/companies/${companyId}/resolutions/${selectedResolution.id}/signers/${signerUserId}`, {
           method: "DELETE",
           headers: { Authorization: `Bearer ${token}` },
         });
+        if (!response.ok) {
+          throw new Error("Failed to remove signer");
+        }
       }
 
-      // Add new signers
+      // Add new signers or update includeStamp setting
+      // Note: The backend's addSigners method handles empty signers array correctly
+      // since it uses createMany with skipDuplicates, so we can safely call this
+      // even when only includeStamp has changed
       const signersToAdd = selectedSigners.filter(id => !currentSignerIds.includes(id));
       if (signersToAdd.length > 0 || includeStamp !== selectedResolution.includeStamp) {
-        await fetch(`${API_URL}/companies/${companyId}/resolutions/${selectedResolution.id}/signers`, {
+        const response = await fetch(`${API_URL}/companies/${companyId}/resolutions/${selectedResolution.id}/signers`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -261,6 +271,9 @@ export default function ResolutionsPage() {
             includeStamp,
           }),
         });
+        if (!response.ok) {
+          throw new Error("Failed to add signers");
+        }
       }
 
       // Refresh resolution details
