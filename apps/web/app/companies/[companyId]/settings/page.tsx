@@ -12,12 +12,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Building2, Globe, Calendar, Bell, Link2, CreditCard, Shield, ChevronRight, Users } from "lucide-react";
+import { Building2, Globe, Calendar, Bell, Link2, CreditCard, Shield, ChevronRight, Users, MapPin, Phone, Mail, ExternalLink, Stamp, Loader2, Upload, X } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { useState, useEffect } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
+
+interface CompanyProfile {
+  address?: string;
+  city?: string;
+  country?: string;
+  postalCode?: string;
+  registrationNo?: string;
+  phone?: string;
+  companyEmail?: string;
+  website?: string;
+  stampUrl?: string;
+}
 
 export default function SettingsPage() {
   const params = useParams();
@@ -27,10 +39,23 @@ export default function SettingsPage() {
   const companyId = params.companyId as string;
   const [isOwner, setIsOwner] = useState(false);
 
+  // Company profile state
+  const [profile, setProfile] = useState<CompanyProfile>({});
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileSuccess, setProfileSuccess] = useState(false);
+
+  // Stamp upload state
+  const [stampFile, setStampFile] = useState<File | null>(null);
+  const [stampPreview, setStampPreview] = useState<string | null>(null);
+  const [isUploadingStamp, setIsUploadingStamp] = useState(false);
+
   useEffect(() => {
-    const checkOwnership = async () => {
+    const fetchCompanyData = async () => {
       if (!user) return;
       try {
+        setIsLoadingProfile(true);
         const token = await getToken();
         const res = await fetch(`${API_URL}/companies/${companyId}`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -41,13 +66,178 @@ export default function SettingsPage() {
             (m: any) => m.user.email === user.primaryEmailAddress?.emailAddress
           );
           setIsOwner(membership?.role === "OWNER");
+
+          // Set profile data from company
+          setProfile({
+            address: company.address || "",
+            city: company.city || "",
+            country: company.country || "",
+            postalCode: company.postalCode || "",
+            registrationNo: company.registrationNo || "",
+            phone: company.phone || "",
+            companyEmail: company.companyEmail || "",
+            website: company.website || "",
+            stampUrl: company.stampUrl || "",
+          });
+
+          if (company.stampUrl) {
+            setStampPreview(company.stampUrl);
+          }
         }
       } catch (error) {
-        console.error("Error checking ownership:", error);
+        console.error("Error fetching company data:", error);
+        setProfileError("Failed to load company data");
+      } finally {
+        setIsLoadingProfile(false);
       }
     };
-    checkOwnership();
+    fetchCompanyData();
   }, [companyId, getToken, user]);
+
+  const handleProfileChange = (field: keyof CompanyProfile, value: string) => {
+    setProfile((prev) => ({ ...prev, [field]: value }));
+    setProfileSuccess(false);
+    setProfileError(null);
+  };
+
+  const handleStampFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith("image/")) {
+        setProfileError("Please upload an image file for the stamp");
+        return;
+      }
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setProfileError("Stamp image must be less than 5MB");
+        return;
+      }
+      setStampFile(file);
+      setStampPreview(URL.createObjectURL(file));
+      setProfileError(null);
+    }
+  };
+
+  const clearStamp = () => {
+    setStampFile(null);
+    setStampPreview(null);
+    setProfile((prev) => ({ ...prev, stampUrl: "" }));
+  };
+
+  const uploadStamp = async (): Promise<string | null> => {
+    if (!stampFile) return profile.stampUrl || null;
+
+    try {
+      setIsUploadingStamp(true);
+      const token = await getToken();
+
+      const formData = new FormData();
+      formData.append("file", stampFile);
+      formData.append("name", `company-stamp-${Date.now()}`);
+      formData.append("type", "GOVERNANCE");
+
+      const response = await fetch(`${API_URL}/companies/${companyId}/documents`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to upload stamp");
+      }
+
+      const doc = await response.json();
+      // Get the download URL for the stamp
+      const downloadRes = await fetch(`${API_URL}/companies/${companyId}/documents/${doc.id}/download`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (downloadRes.ok) {
+        const { url } = await downloadRes.json();
+        return url;
+      }
+
+      return doc.storageKey;
+    } catch (error) {
+      console.error("Error uploading stamp:", error);
+      throw error;
+    } finally {
+      setIsUploadingStamp(false);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      setIsSavingProfile(true);
+      setProfileError(null);
+      setProfileSuccess(false);
+
+      const token = await getToken();
+
+      // Upload stamp if a new file was selected
+      let stampUrl = profile.stampUrl;
+      if (stampFile) {
+        stampUrl = await uploadStamp() || undefined;
+      }
+
+      const payload = {
+        address: profile.address || undefined,
+        city: profile.city || undefined,
+        country: profile.country || undefined,
+        postalCode: profile.postalCode || undefined,
+        registrationNo: profile.registrationNo || undefined,
+        phone: profile.phone || undefined,
+        companyEmail: profile.companyEmail || undefined,
+        website: profile.website || undefined,
+        stampUrl: stampUrl || undefined,
+      };
+
+      const response = await fetch(`${API_URL}/companies/${companyId}/profile`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to save profile");
+      }
+
+      const updated = await response.json();
+      setProfile({
+        address: updated.address || "",
+        city: updated.city || "",
+        country: updated.country || "",
+        postalCode: updated.postalCode || "",
+        registrationNo: updated.registrationNo || "",
+        phone: updated.phone || "",
+        companyEmail: updated.companyEmail || "",
+        website: updated.website || "",
+        stampUrl: updated.stampUrl || "",
+      });
+
+      if (updated.stampUrl) {
+        setStampPreview(updated.stampUrl);
+      }
+
+      setStampFile(null);
+      setProfileSuccess(true);
+
+      // Clear success message after 3 seconds
+      setTimeout(() => setProfileSuccess(false), 3000);
+    } catch (error) {
+      console.error("Error saving profile:", error);
+      setProfileError(error instanceof Error ? error.message : "Failed to save profile");
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -112,25 +302,191 @@ export default function SettingsPage() {
             </div>
             <div>
               <CardTitle>Company Profile</CardTitle>
-              <CardDescription>Update your company information</CardDescription>
+              <CardDescription>Update your company information for use in official documents and resolutions</CardDescription>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="companyName">Company Name</Label>
-              <Input
-                id="companyName"
-                placeholder="Enter company name"
-              />
+        <CardContent className="space-y-6">
+          {isLoadingProfile ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="logo">Company Logo</Label>
-              <Input id="logo" type="file" accept="image/*" />
-            </div>
-          </div>
-          <Button>Save Changes</Button>
+          ) : (
+            <>
+              {/* Error/Success messages */}
+              {profileError && (
+                <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
+                  {profileError}
+                </div>
+              )}
+              {profileSuccess && (
+                <div className="rounded-md bg-green-100 p-3 text-sm text-green-700">
+                  Company profile saved successfully
+                </div>
+              )}
+
+              {/* Address Section */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <MapPin className="h-4 w-4" />
+                  Address Information
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="address">Street Address</Label>
+                    <Input
+                      id="address"
+                      placeholder="123 Business Street, Suite 100"
+                      value={profile.address || ""}
+                      onChange={(e) => handleProfileChange("address", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="city">City</Label>
+                    <Input
+                      id="city"
+                      placeholder="Dubai"
+                      value={profile.city || ""}
+                      onChange={(e) => handleProfileChange("city", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="country">Country</Label>
+                    <Input
+                      id="country"
+                      placeholder="United Arab Emirates"
+                      value={profile.country || ""}
+                      onChange={(e) => handleProfileChange("country", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="postalCode">Postal Code</Label>
+                    <Input
+                      id="postalCode"
+                      placeholder="00000"
+                      value={profile.postalCode || ""}
+                      onChange={(e) => handleProfileChange("postalCode", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="registrationNo">Registration Number</Label>
+                    <Input
+                      id="registrationNo"
+                      placeholder="Company registration number"
+                      value={profile.registrationNo || ""}
+                      onChange={(e) => handleProfileChange("registrationNo", e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Contact Section */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <Phone className="h-4 w-4" />
+                  Contact Information
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone Number</Label>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      placeholder="+971 4 123 4567"
+                      value={profile.phone || ""}
+                      onChange={(e) => handleProfileChange("phone", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="companyEmail">Company Email</Label>
+                    <Input
+                      id="companyEmail"
+                      type="email"
+                      placeholder="info@company.com"
+                      value={profile.companyEmail || ""}
+                      onChange={(e) => handleProfileChange("companyEmail", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="website">Website</Label>
+                    <Input
+                      id="website"
+                      type="url"
+                      placeholder="https://www.company.com"
+                      value={profile.website || ""}
+                      onChange={(e) => handleProfileChange("website", e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Company Stamp Section */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <Stamp className="h-4 w-4" />
+                  Company Stamp
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Upload your company stamp image for use in official resolutions and documents
+                </p>
+                <div className="flex items-start gap-4">
+                  {stampPreview ? (
+                    <div className="relative">
+                      <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-lg border bg-muted">
+                        <img
+                          src={stampPreview}
+                          alt="Company stamp preview"
+                          className="h-full w-full object-contain"
+                        />
+                      </div>
+                      <Button
+                        variant="destructive"
+                        size="icon"
+                        className="absolute -right-2 -top-2 h-6 w-6"
+                        onClick={clearStamp}
+                        type="button"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex h-24 w-24 items-center justify-center rounded-lg border-2 border-dashed bg-muted/50">
+                      <Stamp className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="flex-1 space-y-2">
+                    <Label htmlFor="stamp" className="cursor-pointer">
+                      <div className="flex items-center gap-2 rounded-md border px-4 py-2 text-sm hover:bg-muted">
+                        <Upload className="h-4 w-4" />
+                        {stampPreview ? "Change Stamp" : "Upload Stamp"}
+                      </div>
+                    </Label>
+                    <Input
+                      id="stamp"
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleStampFileChange}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      PNG, JPG, or GIF. Max 5MB.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 pt-4">
+                <Button onClick={handleSaveProfile} disabled={isSavingProfile || isUploadingStamp}>
+                  {(isSavingProfile || isUploadingStamp) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Save Company Profile
+                </Button>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
