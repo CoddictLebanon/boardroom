@@ -23,6 +23,9 @@ export const PERMISSIONS = [
   { code: 'resolutions.edit', area: 'resolutions', action: 'edit', description: 'Edit resolutions' },
   { code: 'resolutions.delete', area: 'resolutions', action: 'delete', description: 'Delete resolutions' },
   { code: 'resolutions.change_status', area: 'resolutions', action: 'change_status', description: 'Change resolution status' },
+  { code: 'resolutions.sign', area: 'resolutions', action: 'sign', description: 'Can be selected as a signer for resolutions' },
+  { code: 'resolutions.manage_signers', area: 'resolutions', action: 'manage_signers', description: 'Can add/remove signers on resolutions' },
+  { code: 'resolutions.download_pdf', area: 'resolutions', action: 'download_pdf', description: 'Can download resolution PDFs' },
 
   // Documents
   { code: 'documents.view', area: 'documents', action: 'view', description: 'View documents' },
