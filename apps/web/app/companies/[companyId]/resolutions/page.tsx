@@ -48,6 +48,7 @@ type ResolutionCategory = "FINANCIAL" | "GOVERNANCE" | "HR" | "OPERATIONS" | "ST
 
 interface Signature {
   id: string;
+  userId: string;
   status: "PENDING" | "SIGNED" | "DECLINED";
   signedAt: string | null;
   order: number;
@@ -386,6 +387,21 @@ export default function ResolutionsPage() {
     try {
       setIsGeneratingPDF(true);
 
+      // Check for pending signatures and warn user
+      const pendingCount = selectedResolution.signatures?.filter(
+        s => s.status === "PENDING"
+      ).length || 0;
+
+      if (pendingCount > 0) {
+        const proceed = confirm(
+          `${pendingCount} signature(s) still pending. Only signed signatures will appear in the PDF. Continue?`
+        );
+        if (!proceed) {
+          setIsGeneratingPDF(false);
+          return;
+        }
+      }
+
       // Ensure we have company data
       let company = companyData;
       if (!company) {
@@ -395,19 +411,37 @@ export default function ResolutionsPage() {
         }
       }
 
+      // Ensure members are loaded for title mapping
+      let currentMembers = members;
+      if (currentMembers.length === 0) {
+        await fetchMembers();
+        // fetchMembers updates state, but we need the value now
+        // Re-fetch company data which includes members
+        const token = await getToken();
+        const res = await fetch(`${API_URL}/companies/${companyId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const companyResponse = await res.json();
+          currentMembers = companyResponse.members || [];
+        }
+      }
+
       // Map signatures to the format expected by ResolutionPDF
       const signatures: ResolutionSignatureForPDF[] = selectedResolution.signatures
         ?.filter(sig => sig.status === "SIGNED")
-        .map(sig => ({
-          user: {
-            firstName: sig.user.firstName || "",
-            lastName: sig.user.lastName || "",
-            signatureUrl: sig.user.signatureUrl || undefined,
-          },
-          signedAt: sig.signedAt || undefined,
-          // Note: title would need to be fetched from company members if needed
-          title: undefined,
-        })) || [];
+        .map(sig => {
+          const member = currentMembers.find(m => m.user.id === sig.userId);
+          return {
+            user: {
+              firstName: sig.user.firstName || "",
+              lastName: sig.user.lastName || "",
+              signatureUrl: sig.user.signatureUrl || undefined,
+            },
+            signedAt: sig.signedAt || undefined,
+            title: member?.title || undefined,
+          };
+        }) || [];
 
       const blob = await pdf(
         <ResolutionPDF
