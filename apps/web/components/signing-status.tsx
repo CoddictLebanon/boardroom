@@ -32,11 +32,11 @@ export function SigningStatus({ signatures }: SigningStatusProps) {
         {signatures.map((sig) => (
           <div key={sig.id} className="flex items-center gap-3">
             {sig.status === "SIGNED" ? (
-              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              <CheckCircle2 className="h-5 w-5 text-green-600" aria-label="Signed" />
             ) : sig.status === "DECLINED" ? (
-              <XCircle className="h-5 w-5 text-red-600" />
+              <XCircle className="h-5 w-5 text-red-600" aria-label="Declined" />
             ) : (
-              <Clock className="h-5 w-5 text-amber-600" />
+              <Clock className="h-5 w-5 text-amber-600" aria-label="Pending signature" />
             )}
             <Avatar className="h-6 w-6">
               <AvatarImage src={sig.user.imageUrl || undefined} />
@@ -45,11 +45,17 @@ export function SigningStatus({ signatures }: SigningStatusProps) {
               </AvatarFallback>
             </Avatar>
             <span className="font-medium">
-              {sig.user.firstName} {sig.user.lastName}
+              {`${sig.user.firstName || ""} ${sig.user.lastName || ""}`.trim() || "Unknown User"}
             </span>
             {sig.status === "SIGNED" && sig.signedAt && (
               <span className="text-sm text-muted-foreground">
-                - Signed {format(new Date(sig.signedAt), "MMM d, yyyy")}
+                - Signed {(() => {
+                  try {
+                    return format(new Date(sig.signedAt), "MMM d, yyyy");
+                  } catch {
+                    return "date unknown";
+                  }
+                })()}
               </span>
             )}
             {sig.status === "PENDING" && (
