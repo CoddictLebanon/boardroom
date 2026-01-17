@@ -67,12 +67,13 @@ export class CompaniesController {
     return this.companiesService.update(companyId, userId, updateCompanyDto);
   }
 
-  @Put(':companyId/profile')
+  @Put(':id/profile')
   async updateProfile(
-    @Param('companyId') companyId: string,
+    @Param('id') companyId: string,
+    @CurrentUser('userId') userId: string,
     @Body() dto: UpdateCompanyProfileDto,
   ) {
-    return this.companiesService.updateProfile(companyId, dto);
+    return this.companiesService.updateProfile(companyId, userId, dto);
   }
 
   @Post(':id/members')

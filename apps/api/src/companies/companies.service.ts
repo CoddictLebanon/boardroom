@@ -242,7 +242,19 @@ export class CompaniesService {
   /**
    * Update company profile details (address, contact info, etc.)
    */
-  async updateProfile(companyId: string, dto: UpdateCompanyProfileDto) {
+  async updateProfile(companyId: string, userId: string, dto: UpdateCompanyProfileDto) {
+    // Check if company exists
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+    });
+
+    if (!company) {
+      throw new NotFoundException('Company not found');
+    }
+
+    // Check if user is admin or owner
+    await this.checkAdminAccess(companyId, userId);
+
     return this.prisma.company.update({
       where: { id: companyId },
       data: {
