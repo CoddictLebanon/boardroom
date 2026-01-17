@@ -150,6 +150,34 @@ export interface Resolution {
   category: ResolutionCategory;
   status: ResolutionStatus;
   effectiveDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+  createdById?: string;
+  generatedBy?: string;
+  includeStamp?: boolean;
+}
+
+// PDF-specific types
+export interface ResolutionSignatureForPDF {
+  user: {
+    firstName: string;
+    lastName: string;
+    signatureUrl?: string;
+  };
+  signedAt?: string;
+  title?: string;
+}
+
+export interface CompanyForPDF {
+  name: string;
+  logo?: string;
+  address?: string;
+  city?: string;
+  country?: string;
+  registrationNo?: string;
+  phone?: string;
+  website?: string;
+  stampUrl?: string;
 }
 
 // Document Types

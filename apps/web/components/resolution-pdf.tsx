@@ -9,6 +9,7 @@ import {
   StyleSheet,
 } from "@react-pdf/renderer";
 import { format } from "date-fns";
+import type { Resolution, ResolutionSignatureForPDF, CompanyForPDF } from "@/lib/types";
 
 // Define styles for the PDF document
 const styles = StyleSheet.create({
@@ -155,30 +156,9 @@ const styles = StyleSheet.create({
 
 // Interfaces for the component props
 interface ResolutionPDFProps {
-  resolution: {
-    number: string;
-    title: string;
-    content: string;
-    category: string;
-    effectiveDate?: string;
-    createdAt: string;
-  };
-  company: {
-    name: string;
-    logo?: string;
-    address?: string;
-    city?: string;
-    country?: string;
-    registrationNo?: string;
-    phone?: string;
-    website?: string;
-    stampUrl?: string;
-  };
-  signatures: {
-    user: { firstName: string; lastName: string; signatureUrl?: string };
-    signedAt?: string;
-    title?: string;
-  }[];
+  resolution: Pick<Resolution, "number" | "title" | "content" | "category" | "effectiveDate" | "createdAt">;
+  company: CompanyForPDF;
+  signatures: ResolutionSignatureForPDF[];
   includeStamp?: boolean;
 }
 
@@ -203,8 +183,9 @@ export function ResolutionPDF({
     if (!dateStr) return null;
     try {
       return format(new Date(dateStr), "MMMM d, yyyy");
-    } catch {
-      return null;
+    } catch (error) {
+      console.error("Failed to format date:", dateStr, error);
+      return dateStr; // Return original string as fallback
     }
   };
 
