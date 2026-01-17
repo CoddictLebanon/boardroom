@@ -126,7 +126,7 @@ export class ResolutionsController {
   }
 
   @Post('companies/:companyId/resolutions/:id/sign')
-  @RequirePermission('resolutions.view')
+  @RequirePermission('resolutions.edit')
   signResolution(
     @Param('companyId') companyId: string,
     @Param('id') id: string,
