@@ -24,6 +24,7 @@ import { MeetingNotesModule } from './meeting-notes/meeting-notes.module';
 import { OkrsModule } from './okrs/okrs.module';
 import { OrgRolesModule } from './org-roles/org-roles.module';
 import { UsersModule } from './users/users.module';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { UsersModule } from './users/users.module';
     OkrsModule,
     OrgRolesModule,
     UsersModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [
