@@ -5,6 +5,8 @@ import {
   UseGuards,
   UsePipes,
   ValidationPipe,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UpdateSignatureDto } from './dto';
@@ -18,6 +20,7 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Put('me/signature')
+  @HttpCode(HttpStatus.OK)
   async updateSignature(
     @CurrentUser('userId') userId: string,
     @Body() dto: UpdateSignatureDto,
