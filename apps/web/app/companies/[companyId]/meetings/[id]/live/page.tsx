@@ -390,6 +390,7 @@ function SortableAgendaItem({ item, index, isActive, onEdit, onDelete }: Sortabl
 interface SortableDecisionProps {
   decision: any;
   isActive: boolean;
+  canVote?: boolean;
   currentUser: any;
   attendees: any[];
   isCastingVote: boolean;
@@ -402,6 +403,7 @@ interface SortableDecisionProps {
 function SortableDecision({
   decision,
   isActive,
+  canVote = false,
   currentUser,
   attendees,
   isCastingVote,
@@ -503,7 +505,7 @@ function SortableDecision({
       </div>
 
       {/* Voting Section */}
-      {isOpenForVoting && isActive && (
+      {isOpenForVoting && canVote && (
         <div className="mt-4 space-y-3">
           {/* Current User Vote Buttons */}
           {isCurrentUserAttendee ? (
@@ -730,10 +732,12 @@ export default function LiveMeetingPage({
   const [isPausing, setIsPausing] = useState(false);
   const [isResuming, setIsResuming] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
+  const [isReopening, setIsReopening] = useState(false);
 
   // Confirmation dialogs
   const [showStartConfirm, setShowStartConfirm] = useState(false);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [showReopenConfirm, setShowReopenConfirm] = useState(false);
 
   // Vote/Decision state
   const [voteDialogOpen, setVoteDialogOpen] = useState(false);
@@ -1223,12 +1227,30 @@ export default function LiveMeetingPage({
       if (!response.ok) throw new Error("Failed to end meeting");
       await refetch();
       setShowEndConfirm(false);
-      router.push(`/companies/${companyId}/meetings/${id}`);
     } catch (error) {
       console.error("Error ending meeting:", error);
       alert("Failed to end meeting. Please try again.");
     } finally {
       setIsEnding(false);
+    }
+  };
+
+  const handleReopenMeeting = async () => {
+    try {
+      setIsReopening(true);
+      const token = await getToken();
+      const response = await fetch(`${API_URL}/companies/${companyId}/meetings/${id}/reopen`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error("Failed to reopen meeting");
+      await refetch();
+      setShowReopenConfirm(false);
+    } catch (error) {
+      console.error("Error reopening meeting:", error);
+      alert("Failed to reopen meeting. Please try again.");
+    } finally {
+      setIsReopening(false);
     }
   };
 
@@ -1810,7 +1832,10 @@ export default function LiveMeetingPage({
   const isScheduled = meeting.status === "SCHEDULED";
   const isInProgress = meeting.status === "IN_PROGRESS";
   const isPaused = meeting.status === "PAUSED";
+  const isCompleted = meeting.status === "COMPLETED";
+  const isCancelled = meeting.status === "CANCELLED";
   const isActive = isInProgress || isPaused;
+  const canEdit = isScheduled || isInProgress || isPaused; // Can edit before and during the meeting
   const attendees = meeting.attendees || [];
 
   return (
@@ -1820,7 +1845,7 @@ export default function LiveMeetingPage({
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" asChild>
-            <Link href={`/companies/${companyId}/meetings/${id}`}>
+            <Link href={`/companies/${companyId}/meetings`}>
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
@@ -1830,12 +1855,18 @@ export default function LiveMeetingPage({
               <Badge
                 variant="secondary"
                 className={
+                  isCompleted ? "bg-gray-100 text-gray-800" :
+                  isCancelled ? "bg-red-100 text-red-800" :
                   isInProgress ? "bg-green-100 text-green-800" :
                   isPaused ? "bg-amber-100 text-amber-800" :
                   "bg-blue-100 text-blue-800"
                 }
               >
-                {isPaused ? "Paused" : isInProgress ? "In Progress" : "Ready to Start"}
+                {isCompleted ? "Completed" :
+                 isCancelled ? "Cancelled" :
+                 isPaused ? "Paused" :
+                 isInProgress ? "In Progress" :
+                 "Ready to Start"}
               </Badge>
             </div>
             <p className="mt-1 text-muted-foreground">
@@ -1845,7 +1876,7 @@ export default function LiveMeetingPage({
         </div>
         <div className="flex gap-2">
           {isScheduled && (
-            <Button onClick={() => setShowStartConfirm(true)}>
+            <Button className="bg-green-600 hover:bg-green-700" onClick={() => setShowStartConfirm(true)}>
               <Play className="mr-2 h-4 w-4" />
               Start Meeting
             </Button>
@@ -1882,18 +1913,38 @@ export default function LiveMeetingPage({
               </Button>
             </>
           )}
+          {isCompleted && (
+            <Button className="bg-green-600 hover:bg-green-700" onClick={() => setShowReopenConfirm(true)}>
+              <Play className="mr-2 h-4 w-4" />
+              Reopen Meeting
+            </Button>
+          )}
         </div>
       </div>
 
       {!isActive && isScheduled && (
-        <Card className="border-amber-200 bg-amber-50">
+        <Card className="border-blue-200 bg-blue-50">
           <CardContent className="flex items-center gap-4 py-4">
-            <div className="rounded-full bg-amber-100 p-2">
-              <Timer className="h-5 w-5 text-amber-600" />
+            <div className="rounded-full bg-blue-100 p-2">
+              <Timer className="h-5 w-5 text-blue-600" />
             </div>
             <div>
-              <p className="font-medium text-amber-800">Meeting hasn't started yet</p>
-              <p className="text-sm text-amber-700">Click "Start Meeting" to begin and enable attendance tracking and voting.</p>
+              <p className="font-medium text-blue-800">Preparation Mode</p>
+              <p className="text-sm text-blue-700">You can add agenda items, notes, and documents. Start the meeting when ready to enable attendance tracking and voting.</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {isCompleted && (
+        <Card className="border-gray-200 bg-gray-50">
+          <CardContent className="flex items-center gap-4 py-4">
+            <div className="rounded-full bg-gray-100 p-2">
+              <CheckCircle2 className="h-5 w-5 text-gray-600" />
+            </div>
+            <div>
+              <p className="font-medium text-gray-800">Meeting has ended</p>
+              <p className="text-sm text-gray-600">This meeting is now complete. Below is a summary of all discussions and decisions.</p>
             </div>
           </CardContent>
         </Card>
@@ -1990,7 +2041,7 @@ export default function LiveMeetingPage({
                     <CardDescription>{agendaItems.length} items</CardDescription>
                   </div>
                 </div>
-                {isActive && (
+                {canEdit && (
                   <Button size="sm" onClick={() => setAgendaDialogOpen(true)}>
                     <Plus className="mr-2 h-4 w-4" />
                     Add
@@ -2015,7 +2066,7 @@ export default function LiveMeetingPage({
                           key={item.id}
                           item={item}
                           index={index}
-                          isActive={isActive}
+                          isActive={canEdit}
                           onEdit={openEditAgendaDialog}
                           onDelete={setAgendaToDelete}
                         />
@@ -2027,7 +2078,7 @@ export default function LiveMeetingPage({
                 <div className="py-8 text-center">
                   <FileText className="mx-auto h-8 w-8 text-muted-foreground/50" />
                   <p className="mt-2 text-sm text-muted-foreground">No agenda items</p>
-                  {isActive && (
+                  {canEdit && (
                     <Button size="sm" variant="outline" className="mt-4" onClick={() => setAgendaDialogOpen(true)}>
                       <Plus className="mr-2 h-4 w-4" />
                       Add Agenda Item
@@ -2051,7 +2102,7 @@ export default function LiveMeetingPage({
                     <CardDescription>Record decisions with voting</CardDescription>
                   </div>
                 </div>
-                {isActive && !activeVote && (
+                {canEdit && !activeVote && (
                   <Button size="sm" onClick={() => setVoteDialogOpen(true)}>
                     <Plus className="mr-2 h-4 w-4" />
                     Add
@@ -2075,7 +2126,8 @@ export default function LiveMeetingPage({
                         <SortableDecision
                           key={decision.id}
                           decision={decision}
-                          isActive={isActive}
+                          isActive={canEdit}
+                          canVote={isActive}
                           currentUser={currentUser}
                           attendees={attendees}
                           isCastingVote={isCastingVote}
@@ -2092,7 +2144,7 @@ export default function LiveMeetingPage({
                 <div className="py-8 text-center">
                   <Vote className="mx-auto h-8 w-8 text-muted-foreground/50" />
                   <p className="mt-2 text-sm text-muted-foreground">No decisions yet</p>
-                  {isActive && (
+                  {canEdit && (
                     <Button size="sm" variant="outline" className="mt-4" onClick={() => setVoteDialogOpen(true)}>
                       <Plus className="mr-2 h-4 w-4" />
                       Add Decision
@@ -2119,7 +2171,7 @@ export default function LiveMeetingPage({
                     <CardDescription>Tasks from this meeting</CardDescription>
                   </div>
                 </div>
-                {isActive && (
+                {canEdit && (
                   <Button size="sm" onClick={() => setActionDialogOpen(true)}>
                     <Plus className="mr-2 h-4 w-4" />
                     Add
@@ -2143,7 +2195,7 @@ export default function LiveMeetingPage({
                         <SortableActionItem
                           key={item.id}
                           item={item}
-                          isActive={isActive}
+                          isActive={canEdit}
                           onEdit={handleOpenEditAction}
                           onDelete={(id) => {
                             setDeletingActionId(id);
@@ -2158,7 +2210,7 @@ export default function LiveMeetingPage({
                 <div className="py-8 text-center">
                   <CheckSquare className="mx-auto h-8 w-8 text-muted-foreground/50" />
                   <p className="mt-2 text-sm text-muted-foreground">No action items yet</p>
-                  {isActive && (
+                  {canEdit && (
                     <Button size="sm" variant="outline" className="mt-4" onClick={() => setActionDialogOpen(true)}>
                       <Plus className="mr-2 h-4 w-4" />
                       Add Action Item
@@ -2184,7 +2236,7 @@ export default function LiveMeetingPage({
             </CardHeader>
             <CardContent>
               {/* Add Note Input */}
-              {isActive && (
+              {canEdit && (
                 <div className="mb-4 flex gap-2">
                   <Input
                     placeholder="Add a note..."
@@ -2220,7 +2272,7 @@ export default function LiveMeetingPage({
                         <SortableNote
                           key={note.id}
                           note={note}
-                          isActive={isActive}
+                          isActive={canEdit}
                           isOwner={note.createdById === currentUser?.id}
                           editingNoteId={editingNoteId}
                           editingNoteContent={editingNoteContent}
@@ -2241,9 +2293,6 @@ export default function LiveMeetingPage({
                 <div className="py-8 text-center">
                   <StickyNote className="mx-auto h-8 w-8 text-muted-foreground/50" />
                   <p className="mt-2 text-sm text-muted-foreground">No notes yet</p>
-                  {!isActive && (
-                    <p className="mt-1 text-xs text-muted-foreground">Start the meeting to add notes</p>
-                  )}
                 </div>
               )}
             </CardContent>
@@ -2263,7 +2312,7 @@ export default function LiveMeetingPage({
                   <CardDescription>{meetingDocuments.length} document{meetingDocuments.length !== 1 ? "s" : ""}</CardDescription>
                 </div>
               </div>
-              {isActive && (
+              {canEdit && (
                 <Button size="sm" onClick={() => setDocumentDialogOpen(true)}>
                   <Upload className="mr-2 h-4 w-4" />
                   Upload
@@ -2302,7 +2351,7 @@ export default function LiveMeetingPage({
                     >
                       <Eye className="h-4 w-4" />
                     </Button>
-                    {isActive && (
+                    {canEdit && (
                       <Button
                         size="icon"
                         variant="ghost"
@@ -2319,7 +2368,7 @@ export default function LiveMeetingPage({
               <div className="py-8 text-center">
                 <Paperclip className="mx-auto h-8 w-8 text-muted-foreground/50" />
                 <p className="mt-2 text-sm text-muted-foreground">No documents attached</p>
-                {isActive && (
+                {canEdit && (
                   <Button size="sm" variant="outline" className="mt-4" onClick={() => setDocumentDialogOpen(true)}>
                     <Upload className="mr-2 h-4 w-4" />
                     Upload Document
@@ -2366,6 +2415,25 @@ export default function LiveMeetingPage({
             <AlertDialogAction onClick={handleEndMeeting} disabled={isEnding} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               {isEnding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               End Meeting
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reopen Meeting Confirmation Dialog */}
+      <AlertDialog open={showReopenConfirm} onOpenChange={setShowReopenConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reopen Meeting?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will reopen the meeting and allow you to continue adding notes, decisions, and action items.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleReopenMeeting} disabled={isReopening} className="bg-green-600 hover:bg-green-700">
+              {isReopening && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Reopen Meeting
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -19,7 +19,6 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiTags, ApiOperation, ApiConsumes, ApiBody } from '@nestjs/swagger';
 import { DocumentsService } from './documents.service';
 import { StorageService } from './storage.service';
 import {
@@ -35,7 +34,6 @@ import { Public } from '../auth/decorators';
 import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
 import { PermissionGuard, RequirePermission } from '../permissions';
 
-@ApiTags('documents')
 @Controller()
 @UseGuards(ClerkAuthGuard, PermissionGuard)
 export class DocumentsController {
@@ -49,7 +47,6 @@ export class DocumentsController {
   // ==========================================
 
   @Post('companies/:companyId/folders')
-  @ApiOperation({ summary: 'Create a new folder' })
   @RequirePermission('documents.upload')
   createFolder(
     @Param('companyId') companyId: string,
@@ -59,14 +56,12 @@ export class DocumentsController {
   }
 
   @Get('companies/:companyId/folders')
-  @ApiOperation({ summary: 'List all folders for a company' })
   @RequirePermission('documents.view')
   listFolders(@Param('companyId') companyId: string) {
     return this.documentsService.listFolders(companyId);
   }
 
   @Put('companies/:companyId/folders/:id')
-  @ApiOperation({ summary: 'Update a folder' })
   @RequirePermission('documents.upload')
   updateFolder(
     @Param('companyId') companyId: string,
@@ -77,7 +72,6 @@ export class DocumentsController {
   }
 
   @Delete('companies/:companyId/folders/:id')
-  @ApiOperation({ summary: 'Delete a folder' })
   @RequirePermission('documents.delete')
   deleteFolder(
     @Param('companyId') companyId: string,
@@ -91,24 +85,6 @@ export class DocumentsController {
   // ==========================================
 
   @Post('companies/:companyId/documents')
-  @ApiOperation({ summary: 'Upload a new document' })
-  @ApiConsumes('multipart/form-data')
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        file: {
-          type: 'string',
-          format: 'binary',
-        },
-        name: { type: 'string' },
-        description: { type: 'string' },
-        type: { type: 'string', enum: ['MEETING', 'FINANCIAL', 'GOVERNANCE', 'GENERAL'] },
-        folderId: { type: 'string' },
-      },
-      required: ['file', 'name', 'type'],
-    },
-  })
   @UseInterceptors(FileInterceptor('file'))
   @RequirePermission('documents.upload')
   createDocument(
@@ -133,7 +109,6 @@ export class DocumentsController {
   }
 
   @Get('companies/:companyId/documents')
-  @ApiOperation({ summary: 'List documents with optional filters' })
   @RequirePermission('documents.view')
   listDocuments(
     @Param('companyId') companyId: string,
@@ -143,7 +118,6 @@ export class DocumentsController {
   }
 
   @Get('companies/:companyId/documents/:id')
-  @ApiOperation({ summary: 'Get document details with versions' })
   @RequirePermission('documents.view')
   getDocument(
     @Param('companyId') companyId: string,
@@ -153,7 +127,6 @@ export class DocumentsController {
   }
 
   @Get('companies/:companyId/documents/:id/download')
-  @ApiOperation({ summary: 'Get presigned download URL' })
   @RequirePermission('documents.download')
   getDownloadUrl(
     @Param('companyId') companyId: string,
@@ -163,7 +136,6 @@ export class DocumentsController {
   }
 
   @Put('companies/:companyId/documents/:id')
-  @ApiOperation({ summary: 'Update document metadata' })
   @RequirePermission('documents.upload')
   updateDocument(
     @Param('companyId') companyId: string,
@@ -174,20 +146,6 @@ export class DocumentsController {
   }
 
   @Post('companies/:companyId/documents/:id/version')
-  @ApiOperation({ summary: 'Upload a new version of a document' })
-  @ApiConsumes('multipart/form-data')
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        file: {
-          type: 'string',
-          format: 'binary',
-        },
-      },
-      required: ['file'],
-    },
-  })
   @UseInterceptors(FileInterceptor('file'))
   @RequirePermission('documents.upload')
   uploadNewVersion(
@@ -210,7 +168,6 @@ export class DocumentsController {
   }
 
   @Delete('companies/:companyId/documents/:id')
-  @ApiOperation({ summary: 'Delete a document' })
   @RequirePermission('documents.delete')
   deleteDocument(
     @Param('companyId') companyId: string,
@@ -224,7 +181,6 @@ export class DocumentsController {
   // ==========================================
 
   @Post('companies/:companyId/documents/:id/tags')
-  @ApiOperation({ summary: 'Add tags to a document' })
   @RequirePermission('documents.upload')
   addTags(
     @Param('companyId') companyId: string,
@@ -235,7 +191,6 @@ export class DocumentsController {
   }
 
   @Delete('companies/:companyId/documents/:id/tags/:tag')
-  @ApiOperation({ summary: 'Remove a tag from a document' })
   @RequirePermission('documents.upload')
   removeTag(
     @Param('companyId') companyId: string,
@@ -253,7 +208,6 @@ export class DocumentsController {
 
   @Public()
   @Get('documents/download/*path')
-  @ApiOperation({ summary: 'Download a file directly from local storage (requires signed URL)' })
   downloadFile(
     @Param('path') path: string[],
     @Query('expires') expires: string,

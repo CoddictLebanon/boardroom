@@ -40,7 +40,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Loader2, GitBranch } from "lucide-react";
-import dagre from "dagre";
+import ELK from "elkjs/lib/elk.bundled.js";
 import { usePermission } from "@/lib/permissions";
 import { OrgRole, CreateOrgRoleInput, UpdateOrgRoleInput, EmploymentType } from "@/lib/types";
 import {
@@ -230,7 +230,7 @@ function TeamPageContent() {
       if (!parentNode) return;
 
       const children = roles.filter(r => r.parentId === parent.id);
-      if (children.length !== 2) return; // Only equalize when exactly 2 children
+      if (children.length === 0) return;
 
       const parentCenterX = parentNode.position.x + nodeWidth / 2;
 
@@ -240,36 +240,23 @@ function TeamPageContent() {
         node: newNodes.find(n => n.id === child.id)
       })).filter(c => c.node);
 
-      if (childNodes.length !== 2) return;
+      if (childNodes.length === 0) return;
 
-      const [child1, child2] = childNodes;
-      const center1 = child1.node!.position.x + nodeWidth / 2;
-      const center2 = child2.node!.position.x + nodeWidth / 2;
+      // Calculate the center of all children
+      const childCenters = childNodes.map(c => c.node!.position.x + nodeWidth / 2);
+      const minChildCenter = Math.min(...childCenters);
+      const maxChildCenter = Math.max(...childCenters);
+      const childrenGroupCenter = (minChildCenter + maxChildCenter) / 2;
 
-      // Only equalize if one is on left and one is on right of parent
-      const child1IsLeft = center1 < parentCenterX;
-      const child2IsLeft = center2 < parentCenterX;
+      // Calculate shift needed to center children under parent
+      const shiftX = parentCenterX - childrenGroupCenter;
 
-      if (child1IsLeft === child2IsLeft) return; // Both on same side, don't adjust
-
-      // Find max offset and equalize
-      const offset1 = Math.abs(center1 - parentCenterX);
-      const offset2 = Math.abs(center2 - parentCenterX);
-      const maxOffset = Math.max(offset1, offset2);
-
-      // Move the closer child to match the further one
-      childNodes.forEach(({ child, node }) => {
-        if (!node) return;
-        const centerX = node.position.x + nodeWidth / 2;
-        const isLeft = centerX < parentCenterX;
-        const currentOffset = Math.abs(centerX - parentCenterX);
-
-        if (currentOffset < maxOffset - 1) {
-          const targetCenterX = isLeft ? parentCenterX - maxOffset : parentCenterX + maxOffset;
-          const deltaX = targetCenterX - centerX;
-          moveSubtree(child.id, deltaX);
-        }
-      });
+      // Only shift if there's a meaningful difference
+      if (Math.abs(shiftX) > 1) {
+        childNodes.forEach(({ child }) => {
+          moveSubtree(child.id, shiftX);
+        });
+      }
     });
 
     // Recenter the entire tree after all adjustments
@@ -360,124 +347,125 @@ function TeamPageContent() {
     }
   };
 
-  // Auto-arrange nodes in a tree layout using dagre
+  // Auto-arrange nodes in a tree layout using ELK
   const handleAutoArrange = useCallback(async () => {
     if (roles.length === 0) return;
 
     try {
       setArranging(true);
 
-      // Create a new dagre graph
-      const g = new dagre.graphlib.Graph();
-      g.setGraph({ rankdir: "TB", nodesep: 80, ranksep: 200 });
-      g.setDefaultEdgeLabel(() => ({}));
+      const elk = new ELK();
 
       // Node dimensions
       const nodeWidth = 224; // w-56 = 14rem = 224px
-      const nodeHeight = 180; // Fixed height for consistent sizing
+      const nodeHeight = 160;
 
-      // Add nodes to the graph
-      roles.forEach((role) => {
-        g.setNode(role.id, { width: nodeWidth, height: nodeHeight });
-      });
+      // Build ELK graph
+      const graph = {
+        id: "root",
+        layoutOptions: {
+          "elk.algorithm": "layered",
+          "elk.direction": "DOWN",
+          "elk.spacing.nodeNode": "250",
+          "elk.layered.spacing.nodeNodeBetweenLayers": "120",
+          "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
+          "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
+        },
+        children: roles.map((role) => ({
+          id: role.id,
+          width: nodeWidth,
+          height: nodeHeight,
+        })),
+        edges: roles
+          .filter((role) => role.parentId)
+          .map((role) => ({
+            id: `e-${role.parentId}-${role.id}`,
+            sources: [role.parentId!],
+            targets: [role.id],
+          })),
+      };
 
-      // Add edges to the graph (parent -> child)
-      roles.forEach((role) => {
-        if (role.parentId) {
-          g.setEdge(role.parentId, role.id);
-        }
-      });
+      // Run ELK layout
+      const layoutedGraph = await elk.layout(graph);
 
-      // Run the layout algorithm
-      dagre.layout(g);
-
-      // Get positions from dagre
+      // Extract positions into a map for easier manipulation
       const positionMap = new Map<string, { x: number; y: number }>();
-      roles.forEach((role) => {
-        const node = g.node(role.id);
-        if (node) {
-          positionMap.set(role.id, { x: node.x, y: node.y });
-        }
+      layoutedGraph.children?.forEach((node) => {
+        positionMap.set(node.id, { x: node.x || 0, y: node.y || 0 });
       });
 
-      // Helper to check if a role has descendants
-      const hasDescendants = (roleId: string): boolean => {
-        return roles.some(r => r.parentId === roleId);
-      };
-
-      // Helper to get all descendants of a role
-      const getAllDescendants = (roleId: string): string[] => {
+      // Helper to count all descendants
+      const countDescendants = (roleId: string): number => {
         const children = roles.filter(r => r.parentId === roleId);
-        const descendants: string[] = [];
+        let count = children.length;
         children.forEach(child => {
-          descendants.push(child.id);
-          descendants.push(...getAllDescendants(child.id));
+          count += countDescendants(child.id);
         });
-        return descendants;
+        return count;
       };
 
-      // Helper to move a subtree by deltaX
-      const moveSubtreeX = (roleId: string, deltaX: number) => {
-        const pos = positionMap.get(roleId);
-        if (pos) pos.x += deltaX;
-        getAllDescendants(roleId).forEach(descId => {
-          const descPos = positionMap.get(descId);
-          if (descPos) descPos.x += deltaX;
-        });
-      };
+      // Reorder siblings so nodes with children are in the middle
+      // Group by parent
+      const childrenByParent = new Map<string, string[]>();
+      roles.forEach(role => {
+        const parentId = role.parentId || "root";
+        if (!childrenByParent.has(parentId)) {
+          childrenByParent.set(parentId, []);
+        }
+        childrenByParent.get(parentId)!.push(role.id);
+      });
 
-      // Reorder siblings: nodes with children in middle, leafs on sides
-      // Process top-down so parent reordering happens before children
-      const getDepth = (roleId: string): number => {
-        const role = roles.find(r => r.id === roleId);
-        if (!role || !role.parentId) return 0;
-        return 1 + getDepth(role.parentId);
-      };
-      const sortedByDepth = [...roles].sort((a, b) => getDepth(a.id) - getDepth(b.id));
+      // For each parent's children, reorder them
+      childrenByParent.forEach((childIds, parentId) => {
+        if (childIds.length < 2) return;
 
-      sortedByDepth.forEach((parent) => {
-        const children = roles.filter(r => r.parentId === parent.id);
-        if (children.length < 2) return;
-
-        // Get current X positions of children
-        const childData = children.map(c => ({
-          role: c,
-          x: positionMap.get(c.id)?.x || 0,
-          hasChildren: hasDescendants(c.id)
+        // Get current positions sorted by X
+        const childData = childIds.map(id => ({
+          id,
+          x: positionMap.get(id)?.x || 0,
+          descendants: countDescendants(id)
         })).sort((a, b) => a.x - b.x);
 
-        // Get the X slots (current positions sorted)
+        // Get the X slots (current positions)
         const xSlots = childData.map(c => c.x);
 
-        // Separate into branching and leaf nodes (preserve their relative order)
-        const branchingNodes = childData.filter(c => c.hasChildren);
-        const leafNodes = childData.filter(c => !c.hasChildren);
+        // Separate into nodes with children and leaf nodes
+        const withChildren = childData.filter(c => c.descendants > 0);
+        const leafNodes = childData.filter(c => c.descendants === 0);
 
-        // Desired order: left leafs, middle branching, right leafs
+        // Sort nodes with children by descendant count (most descendants = most central)
+        withChildren.sort((a, b) => b.descendants - a.descendants);
+
+        // Build desired order: left leaves, center (nodes with children), right leaves
         const leftLeafCount = Math.floor(leafNodes.length / 2);
-        const leftLeafs = leafNodes.slice(0, leftLeafCount);
-        const rightLeafs = leafNodes.slice(leftLeafCount);
-        const desiredOrder = [...leftLeafs, ...branchingNodes, ...rightLeafs];
+        const leftLeaves = leafNodes.slice(0, leftLeafCount);
+        const rightLeaves = leafNodes.slice(leftLeafCount);
 
-        // Move each subtree to its new slot
+        // Arrange withChildren from center outward
+        const centeredWithChildren: typeof withChildren = [];
+        for (let i = 0; i < withChildren.length; i++) {
+          if (i % 2 === 0) {
+            centeredWithChildren.push(withChildren[i]);
+          } else {
+            centeredWithChildren.unshift(withChildren[i]);
+          }
+        }
+
+        const desiredOrder = [...leftLeaves, ...centeredWithChildren, ...rightLeaves];
+
+        // Assign new X positions
         desiredOrder.forEach((item, index) => {
-          const currentX = positionMap.get(item.role.id)?.x || 0;
-          const targetX = xSlots[index];
-          const deltaX = targetX - currentX;
-          if (Math.abs(deltaX) > 1) {
-            moveSubtreeX(item.role.id, deltaX);
+          const pos = positionMap.get(item.id);
+          if (pos) {
+            pos.x = xSlots[index];
           }
         });
       });
 
-      // Convert to final positions (top-left corner)
+      // Convert to final positions array
       const newPositions: { id: string; x: number; y: number }[] = [];
       positionMap.forEach((pos, id) => {
-        newPositions.push({
-          id,
-          x: pos.x - nodeWidth / 2,
-          y: pos.y - nodeHeight / 2,
-        });
+        newPositions.push({ id, x: pos.x, y: pos.y });
       });
 
       // Update local nodes immediately for visual feedback

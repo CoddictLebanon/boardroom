@@ -814,6 +814,39 @@ export class MeetingsService {
     return updated;
   }
 
+  async reopenMeeting(meetingId: string, userId: string) {
+    const meeting = await this.getMeeting(meetingId, userId);
+
+    if (meeting.status !== MeetingStatus.COMPLETED) {
+      throw new BadRequestException('Only completed meetings can be reopened');
+    }
+
+    const updated = await this.prisma.meeting.update({
+      where: { id: meetingId },
+      data: {
+        status: MeetingStatus.IN_PROGRESS,
+      },
+      include: {
+        attendees: {
+          include: {
+            member: {
+              include: {
+                user: true,
+              },
+            },
+          },
+        },
+        agendaItems: {
+          orderBy: {
+            order: 'asc',
+          },
+        },
+      },
+    });
+
+    return updated;
+  }
+
   async updateMeetingNotes(meetingId: string, userId: string, notes: string) {
     const meeting = await this.getMeeting(meetingId, userId);
 

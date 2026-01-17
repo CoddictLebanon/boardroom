@@ -10,7 +10,6 @@ import {
   Logger,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { MeetingsService } from './meetings.service';
 import {
   CreateMeetingDto,
@@ -27,8 +26,6 @@ import { CurrentUser } from '../auth/decorators';
 import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
 import { PermissionGuard, RequirePermission } from '../permissions';
 
-@ApiTags('meetings')
-@ApiBearerAuth()
 @Controller()
 @UseGuards(ClerkAuthGuard, PermissionGuard)
 export class MeetingsController {
@@ -38,7 +35,6 @@ export class MeetingsController {
 
   @Post('companies/:companyId/meetings')
   @RequirePermission('meetings.create')
-  @ApiOperation({ summary: 'Create a new meeting' })
   async createMeeting(
     @Param('companyId') companyId: string,
     @Body() createMeetingDto: CreateMeetingDto,
@@ -49,10 +45,6 @@ export class MeetingsController {
 
   @Get('companies/:companyId/meetings')
   @RequirePermission('meetings.view')
-  @ApiOperation({ summary: 'Get all meetings for a company' })
-  @ApiQuery({ name: 'status', enum: ['SCHEDULED', 'IN_PROGRESS', 'PAUSED', 'COMPLETED', 'CANCELLED'], required: false })
-  @ApiQuery({ name: 'upcoming', type: Boolean, required: false })
-  @ApiQuery({ name: 'past', type: Boolean, required: false })
   async getMeetings(
     @Param('companyId') companyId: string,
     @Query('status') status?: MeetingStatus,
@@ -70,7 +62,6 @@ export class MeetingsController {
 
   @Get('companies/:companyId/meetings/:id')
   @RequirePermission('meetings.view')
-  @ApiOperation({ summary: 'Get a specific meeting with full details' })
   async getMeeting(
     @Param('companyId') companyId: string,
     @Param('id') id: string,
@@ -81,7 +72,6 @@ export class MeetingsController {
 
   @Put('companies/:companyId/meetings/:id')
   @RequirePermission('meetings.edit')
-  @ApiOperation({ summary: 'Update meeting details' })
   async updateMeeting(
     @Param('companyId') companyId: string,
     @Param('id') id: string,
@@ -93,7 +83,6 @@ export class MeetingsController {
 
   @Delete('companies/:companyId/meetings/:id')
   @RequirePermission('meetings.delete')
-  @ApiOperation({ summary: 'Cancel a meeting' })
   async cancelMeeting(
     @Param('companyId') companyId: string,
     @Param('id') id: string,
@@ -104,7 +93,6 @@ export class MeetingsController {
 
   @Post('companies/:companyId/meetings/:id/agenda')
   @RequirePermission('meetings.edit')
-  @ApiOperation({ summary: 'Add an agenda item to a meeting' })
   async addAgendaItem(
     @Param('companyId') companyId: string,
     @Param('id') id: string,
@@ -117,7 +105,6 @@ export class MeetingsController {
 
   @Put('companies/:companyId/meetings/:id/agenda/:itemId')
   @RequirePermission('meetings.edit')
-  @ApiOperation({ summary: 'Update an agenda item' })
   async updateAgendaItem(
     @Param('companyId') companyId: string,
     @Param('id') id: string,
@@ -130,7 +117,6 @@ export class MeetingsController {
 
   @Post('companies/:companyId/meetings/:id/attendees')
   @RequirePermission('meetings.edit')
-  @ApiOperation({ summary: 'Add attendees to a meeting' })
   async addAttendees(
     @Param('companyId') companyId: string,
     @Param('id') id: string,
@@ -142,7 +128,6 @@ export class MeetingsController {
 
   @Put('companies/:companyId/meetings/:id/attendees/:attendeeId')
   @RequirePermission('meetings.edit')
-  @ApiOperation({ summary: 'Mark attendance for an attendee' })
   async markAttendance(
     @Param('companyId') companyId: string,
     @Param('id') id: string,
@@ -155,7 +140,6 @@ export class MeetingsController {
 
   @Post('companies/:companyId/meetings/:id/decisions')
   @RequirePermission('meetings.edit')
-  @ApiOperation({ summary: 'Create a decision for voting' })
   async createDecision(
     @Param('companyId') companyId: string,
     @Param('id') id: string,
@@ -167,7 +151,6 @@ export class MeetingsController {
 
   @Post('companies/:companyId/meetings/:id/decisions/:decisionId/vote')
   @RequirePermission('meetings.edit')
-  @ApiOperation({ summary: 'Cast a vote on a decision' })
   async castVote(
     @Param('companyId') companyId: string,
     @Param('id') id: string,
@@ -180,7 +163,6 @@ export class MeetingsController {
 
   @Post('companies/:companyId/meetings/:id/decisions/:decisionId/votes')
   @RequirePermission('meetings.edit')
-  @ApiOperation({ summary: 'Cast a vote on a decision (alternate endpoint)' })
   async castVoteAlternate(
     @Param('companyId') companyId: string,
     @Param('id') id: string,
@@ -193,7 +175,6 @@ export class MeetingsController {
 
   @Put('companies/:companyId/meetings/:id/decisions/reorder')
   @RequirePermission('meetings.edit')
-  @ApiOperation({ summary: 'Reorder decisions in a meeting' })
   async reorderDecisions(
     @Param('companyId') companyId: string,
     @Param('id') id: string,
@@ -205,7 +186,6 @@ export class MeetingsController {
 
   @Put('companies/:companyId/meetings/:id/decisions/:decisionId')
   @RequirePermission('meetings.edit')
-  @ApiOperation({ summary: 'Update a decision outcome or details' })
   async updateDecision(
     @Param('companyId') companyId: string,
     @Param('id') id: string,
@@ -218,7 +198,6 @@ export class MeetingsController {
 
   @Delete('companies/:companyId/meetings/:id/decisions/:decisionId')
   @RequirePermission('meetings.edit')
-  @ApiOperation({ summary: 'Delete a decision' })
   async deleteDecision(
     @Param('companyId') companyId: string,
     @Param('id') id: string,
@@ -230,7 +209,6 @@ export class MeetingsController {
 
   @Post('companies/:companyId/meetings/:id/start')
   @RequirePermission('meetings.start_live')
-  @ApiOperation({ summary: 'Start a meeting (set status to IN_PROGRESS)' })
   async startMeeting(
     @Param('companyId') companyId: string,
     @Param('id') id: string,
@@ -241,7 +219,6 @@ export class MeetingsController {
 
   @Post('companies/:companyId/meetings/:id/pause')
   @RequirePermission('meetings.start_live')
-  @ApiOperation({ summary: 'Pause a running meeting' })
   async pauseMeeting(
     @Param('companyId') companyId: string,
     @Param('id') id: string,
@@ -252,7 +229,6 @@ export class MeetingsController {
 
   @Post('companies/:companyId/meetings/:id/resume')
   @RequirePermission('meetings.start_live')
-  @ApiOperation({ summary: 'Resume a paused meeting' })
   async resumeMeeting(
     @Param('companyId') companyId: string,
     @Param('id') id: string,
@@ -263,7 +239,6 @@ export class MeetingsController {
 
   @Post('companies/:companyId/meetings/:id/end')
   @RequirePermission('meetings.start_live')
-  @ApiOperation({ summary: 'End a meeting (alias for complete)' })
   async endMeeting(
     @Param('companyId') companyId: string,
     @Param('id') id: string,
@@ -272,9 +247,18 @@ export class MeetingsController {
     return this.meetingsService.completeMeeting(id, userId);
   }
 
+  @Post('companies/:companyId/meetings/:id/reopen')
+  @RequirePermission('meetings.start_live')
+  async reopenMeeting(
+    @Param('companyId') companyId: string,
+    @Param('id') id: string,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.meetingsService.reopenMeeting(id, userId);
+  }
+
   @Post('companies/:companyId/meetings/:id/complete')
   @RequirePermission('meetings.start_live')
-  @ApiOperation({ summary: 'Complete a meeting and generate summary' })
   async completeMeeting(
     @Param('companyId') companyId: string,
     @Param('id') id: string,
@@ -285,7 +269,6 @@ export class MeetingsController {
 
   @Put('companies/:companyId/meetings/:id/notes')
   @RequirePermission('meetings.edit')
-  @ApiOperation({ summary: 'Update meeting notes' })
   async updateMeetingNotes(
     @Param('companyId') companyId: string,
     @Param('id') id: string,

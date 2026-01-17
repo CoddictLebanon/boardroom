@@ -9,15 +9,12 @@ import {
   HttpStatus,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { InvitationsService } from './invitations.service';
 import { CreateInvitationDto } from './dto';
 import { CurrentUser } from '../auth/decorators';
 import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
 import { PermissionGuard, RequirePermission } from '../permissions';
 
-@ApiTags('invitations')
-@ApiBearerAuth()
 @Controller()
 @UseGuards(ClerkAuthGuard)
 export class InvitationsController {
@@ -27,7 +24,6 @@ export class InvitationsController {
   @UseGuards(PermissionGuard)
   @RequirePermission('members.invite')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create an invitation' })
   createInvitation(
     @Param('companyId') companyId: string,
     @CurrentUser('userId') userId: string,
@@ -39,7 +35,6 @@ export class InvitationsController {
   @Get('companies/:companyId/invitations')
   @UseGuards(PermissionGuard)
   @RequirePermission('members.view')
-  @ApiOperation({ summary: 'List invitations for a company' })
   listInvitations(
     @Param('companyId') companyId: string,
     @CurrentUser('userId') userId: string,
@@ -50,7 +45,6 @@ export class InvitationsController {
   @Delete('companies/:companyId/invitations/:id')
   @UseGuards(PermissionGuard)
   @RequirePermission('members.invite')
-  @ApiOperation({ summary: 'Revoke an invitation' })
   revokeInvitation(
     @Param('companyId') companyId: string,
     @Param('id') id: string,
@@ -61,7 +55,6 @@ export class InvitationsController {
 
   @Post('invitations/:token/accept')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Accept an invitation by token' })
   acceptInvitation(
     @Param('token') token: string,
     @CurrentUser('userId') userId: string,
