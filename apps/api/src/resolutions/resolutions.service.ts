@@ -136,6 +136,20 @@ export class ResolutionsService {
             },
           },
         },
+        signatures: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+                signatureUrl: true,
+              },
+            },
+          },
+          orderBy: { order: 'asc' },
+        },
       },
     });
 
@@ -245,6 +259,71 @@ export class ResolutionsService {
 
   async getNextResolutionNumber(companyId: string): Promise<string> {
     return this.generateResolutionNumber(companyId);
+  }
+
+  async addSigners(
+    resolutionId: string,
+    signers: { userId: string; order?: number }[],
+    includeStamp?: boolean,
+  ) {
+    const resolution = await this.findOne(resolutionId);
+
+    if (!resolution) {
+      throw new NotFoundException('Resolution not found');
+    }
+
+    // Create signature records
+    const signatureData = signers.map((signer, index) => ({
+      resolutionId,
+      userId: signer.userId,
+      order: signer.order ?? index,
+      status: 'PENDING' as const,
+    }));
+
+    await this.prisma.resolutionSignature.createMany({
+      data: signatureData,
+      skipDuplicates: true,
+    });
+
+    // Update includeStamp if provided
+    if (includeStamp !== undefined) {
+      await this.prisma.resolution.update({
+        where: { id: resolutionId },
+        data: { includeStamp },
+      });
+    }
+
+    return this.findOne(resolutionId);
+  }
+
+  async removeSigner(resolutionId: string, userId: string) {
+    await this.prisma.resolutionSignature.delete({
+      where: {
+        resolutionId_userId: { resolutionId, userId },
+      },
+    });
+    return this.findOne(resolutionId);
+  }
+
+  async signResolution(resolutionId: string, userId: string) {
+    // Verify user has a signature uploaded
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user?.signatureUrl) {
+      throw new BadRequestException('You must upload a signature before signing');
+    }
+
+    // Update the signature record
+    await this.prisma.resolutionSignature.update({
+      where: {
+        resolutionId_userId: { resolutionId, userId },
+      },
+      data: {
+        status: 'SIGNED',
+        signedAt: new Date(),
+      },
+    });
+
+    return this.findOne(resolutionId);
   }
 
   private async generateResolutionNumber(companyId: string): Promise<string> {
