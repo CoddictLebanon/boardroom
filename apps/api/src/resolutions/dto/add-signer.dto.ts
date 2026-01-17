@@ -1,8 +1,9 @@
-import { IsString, IsInt, IsOptional, IsBoolean, IsArray, ValidateNested } from 'class-validator';
+import { IsString, IsInt, IsOptional, IsBoolean, IsArray, ValidateNested, IsNotEmpty } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class AddSignerDto {
   @IsString()
+  @IsNotEmpty()
   userId: string;
 
   @IsOptional()
