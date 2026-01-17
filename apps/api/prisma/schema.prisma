@@ -13,13 +13,14 @@ datasource db {
 
 // Users (synced from Clerk)
 model User {
-  id        String   @id
-  email     String   @unique
-  firstName String?
-  lastName  String?
-  imageUrl  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id
+  email        String   @unique
+  firstName    String?
+  lastName     String?
+  imageUrl     String?
+  signatureUrl String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   memberships             CompanyMember[]
   assignedActions         ActionItem[]           @relation("ActionAssignee")
