@@ -33,6 +33,7 @@ model User {
   createdDecisions        Decision[]             @relation("DecisionCreator")
   createdNotes            MeetingNote[]          @relation("NoteCreator")
   resolutionSignatures    ResolutionSignature[]
+  createdResolutions      Resolution[]           @relation("ResolutionCreator")
 }
 
 // Companies (workspaces)
@@ -468,8 +469,15 @@ model Resolution {
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 
-  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  decision Decision? @relation(fields: [decisionId], references: [id])
+  // New fields for resolution signing feature
+  createdById   String?
+  generatedBy   String?            // "AI" or null
+  includeStamp  Boolean            @default(false)
+
+  company    Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  decision   Decision?              @relation(fields: [decisionId], references: [id])
+  createdBy  User?                  @relation("ResolutionCreator", fields: [createdById], references: [id])
+  signatures ResolutionSignature[]
 
   @@index([companyId, number])
 }
