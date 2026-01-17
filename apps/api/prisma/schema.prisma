@@ -44,6 +44,17 @@ model Company {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  // Profile fields for resolutions
+  address         String?
+  city            String?
+  country         String?
+  postalCode      String?
+  registrationNo  String?
+  phone           String?
+  companyEmail    String?
+  website         String?
+  stampUrl        String?
+
   members                 CompanyMember[]
   meetings                Meeting[]
   documents               Document[]
