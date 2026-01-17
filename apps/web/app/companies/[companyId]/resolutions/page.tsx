@@ -30,7 +30,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Vote, Plus, Loader2, CheckCircle2, Clock, XCircle, ScrollText, MoreHorizontal, FileText, Trash2, Calendar, PenTool, Users, AlertCircle, Download } from "lucide-react";
+import { Vote, Plus, Loader2, CheckCircle2, Clock, XCircle, ScrollText, MoreHorizontal, FileText, Trash2, Calendar, PenTool, Users, AlertCircle, Download, Copy } from "lucide-react";
 import { pdf } from "@react-pdf/renderer";
 import { ResolutionPDF } from "@/components/resolution-pdf";
 import type { CompanyForPDF, ResolutionSignatureForPDF } from "@/lib/types";
@@ -590,6 +590,31 @@ export default function ResolutionsPage() {
     }
   };
 
+  const handleDuplicate = async (resolutionId: string) => {
+    try {
+      const token = await getToken();
+      if (!token) return;
+
+      const response = await fetch(
+        `${API_URL}/companies/${companyId}/resolutions/${resolutionId}/duplicate`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to duplicate resolution");
+      }
+
+      const newResolution = await response.json();
+      router.push(`/companies/${companyId}/resolutions/${newResolution.id}`);
+    } catch (error) {
+      console.error("Error duplicating resolution:", error);
+      alert("Failed to duplicate resolution. Please try again.");
+    }
+  };
+
   // Calculate stats
   const totalCount = resolutions.length;
   const passedCount = resolutions.filter((r) => r.status === "PASSED").length;
@@ -717,7 +742,7 @@ export default function ResolutionsPage() {
                     <Badge className={statusColors[resolution.status]}>
                       {resolution.status}
                     </Badge>
-                    {(canChangeStatus || (canDelete && resolution.status === "DRAFT")) && (
+                    {(canCreate || canChangeStatus || (canDelete && resolution.status === "DRAFT")) && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                           <Button variant="ghost" size="sm">
@@ -725,6 +750,15 @@ export default function ResolutionsPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          {canCreate && (
+                            <DropdownMenuItem onClick={(e) => {
+                              e.stopPropagation();
+                              handleDuplicate(resolution.id);
+                            }}>
+                              <Copy className="mr-2 h-4 w-4" />
+                              Duplicate
+                            </DropdownMenuItem>
+                          )}
                           {canChangeStatus && resolution.status === "DRAFT" && (
                             <DropdownMenuItem onClick={(e) => {
                               e.stopPropagation();
