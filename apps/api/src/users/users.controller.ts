@@ -1,5 +1,6 @@
 import {
   Controller,
+  Get,
   Put,
   Body,
   UseGuards,
@@ -18,6 +19,11 @@ import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  @Get('me')
+  async getMe(@CurrentUser('userId') userId: string) {
+    return this.usersService.getMe(userId);
+  }
 
   @Put('me/signature')
   @HttpCode(HttpStatus.OK)

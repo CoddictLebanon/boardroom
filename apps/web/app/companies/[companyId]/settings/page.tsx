@@ -12,7 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Building2, Globe, Calendar, Bell, Link2, CreditCard, Shield, ChevronRight, Users, MapPin, Phone, Mail, ExternalLink, Stamp, Loader2, Upload, X, Lock } from "lucide-react";
+import { Building2, Globe, Calendar, Bell, Link2, CreditCard, Shield, ChevronRight, Users, MapPin, Phone, Stamp, Loader2, Upload, X, Lock } from "lucide-react";
+import { SignatureUploader } from "@/components/signature-uploader";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { useState, useEffect } from "react";
@@ -60,6 +61,9 @@ export default function SettingsPage() {
   const [stampPreview, setStampPreview] = useState<string | null>(null);
   const [isUploadingStamp, setIsUploadingStamp] = useState(false);
 
+  // User signature state
+  const [userSignatureUrl, setUserSignatureUrl] = useState<string | null>(null);
+
   // Cleanup blob URL when component unmounts or stampPreview changes
   useEffect(() => {
     return () => {
@@ -76,6 +80,25 @@ export default function SettingsPage() {
       return () => clearTimeout(timeoutId);
     }
   }, [profileSuccess]);
+
+  // Fetch user's signature URL
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const token = await getToken();
+        const res = await fetch(`${API_URL}/users/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const userData = await res.json();
+          setUserSignatureUrl(userData.signatureUrl || null);
+        }
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+      }
+    };
+    fetchUserData();
+  }, [getToken]);
 
   useEffect(() => {
     const fetchCompanyData = async () => {
@@ -279,6 +302,13 @@ export default function SettingsPage() {
           Manage your company and account settings
         </p>
       </div>
+
+      {/* Personal Settings - User Signature */}
+      <SignatureUploader
+        currentSignatureUrl={userSignatureUrl}
+        companyId={companyId}
+        onUpdate={(url) => setUserSignatureUrl(url)}
+      />
 
       {/* Members */}
       <Card
