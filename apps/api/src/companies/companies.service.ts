@@ -11,6 +11,7 @@ import { MemberRole, MemberStatus } from '@prisma/client';
 import {
   CreateCompanyDto,
   UpdateCompanyDto,
+  UpdateCompanyProfileDto,
   AddMemberDto,
   UpdateMemberDto,
 } from './dto';
@@ -234,6 +235,26 @@ export class CompaniesService {
             },
           },
         },
+      },
+    });
+  }
+
+  /**
+   * Update company profile details (address, contact info, etc.)
+   */
+  async updateProfile(companyId: string, dto: UpdateCompanyProfileDto) {
+    return this.prisma.company.update({
+      where: { id: companyId },
+      data: {
+        address: dto.address,
+        city: dto.city,
+        country: dto.country,
+        postalCode: dto.postalCode,
+        registrationNo: dto.registrationNo,
+        phone: dto.phone,
+        companyEmail: dto.companyEmail,
+        website: dto.website,
+        stampUrl: dto.stampUrl,
       },
     });
   }

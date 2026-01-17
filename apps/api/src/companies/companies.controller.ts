@@ -14,6 +14,7 @@ import { CompaniesService } from './companies.service';
 import {
   CreateCompanyDto,
   UpdateCompanyDto,
+  UpdateCompanyProfileDto,
   AddMemberDto,
   UpdateMemberDto,
 } from './dto';
@@ -64,6 +65,14 @@ export class CompaniesController {
     @Body() updateCompanyDto: UpdateCompanyDto,
   ) {
     return this.companiesService.update(companyId, userId, updateCompanyDto);
+  }
+
+  @Put(':companyId/profile')
+  async updateProfile(
+    @Param('companyId') companyId: string,
+    @Body() dto: UpdateCompanyProfileDto,
+  ) {
+    return this.companiesService.updateProfile(companyId, dto);
   }
 
   @Post(':id/members')
