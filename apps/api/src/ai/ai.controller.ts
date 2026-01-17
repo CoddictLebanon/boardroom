@@ -1,11 +1,12 @@
-import { Controller, Post, Body, Param, UseGuards, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Controller, Post, Body, Param, UseGuards, UsePipes, ValidationPipe, NotFoundException } from '@nestjs/common';
 import { AiService } from './ai.service';
 import { GenerateResolutionDto } from './dto/generate-resolution.dto';
 import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
+import { PermissionGuard, RequirePermission } from '../permissions';
 
 @Controller('api/v1/ai')
-@UseGuards(ClerkAuthGuard)
+@UseGuards(ClerkAuthGuard, PermissionGuard)
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
 export class AiController {
   constructor(
@@ -14,6 +15,7 @@ export class AiController {
   ) {}
 
   @Post('companies/:companyId/generate-resolution')
+  @RequirePermission('resolutions.create')
   async generateResolution(
     @Param('companyId') companyId: string,
     @Body() dto: GenerateResolutionDto,
@@ -24,6 +26,10 @@ export class AiController {
       select: { name: true },
     });
 
-    return this.aiService.generateResolution(company?.name || 'Company', dto);
+    if (!company) {
+      throw new NotFoundException(`Company with id ${companyId} not found`);
+    }
+
+    return this.aiService.generateResolution(company.name, dto);
   }
 }

@@ -1,12 +1,16 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
 import Anthropic from '@anthropic-ai/sdk';
 import { GenerateResolutionDto } from './dto/generate-resolution.dto';
 
 @Injectable()
 export class AiService {
+  private readonly logger = new Logger(AiService.name);
   private client: Anthropic;
 
   constructor() {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      this.logger.warn('ANTHROPIC_API_KEY is not configured. AI features will not work.');
+    }
     this.client = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY,
     });
@@ -40,18 +44,23 @@ Be concise but thorough. Ask only necessary questions.`;
 
     messages.push({ role: 'user', content: dto.message });
 
-    const response = await this.client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 2048,
-      system: systemPrompt,
-      messages,
-    });
+    try {
+      const response = await this.client.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 2048,
+        system: systemPrompt,
+        messages,
+      });
 
-    const responseText = response.content[0].type === 'text' ? response.content[0].text : '';
+      const responseText = response.content?.[0]?.type === 'text' ? response.content[0].text : '';
 
-    return {
-      content: responseText,
-      conversationHistory: [...messages, { role: 'assistant' as const, content: responseText }],
-    };
+      return {
+        content: responseText,
+        conversationHistory: [...messages, { role: 'assistant' as const, content: responseText }],
+      };
+    } catch (error) {
+      this.logger.error('Failed to generate resolution with AI', error);
+      throw new InternalServerErrorException('Failed to generate resolution. Please try again later.');
+    }
   }
 }
