@@ -105,6 +105,16 @@ export class ResolutionsController {
     return this.resolutionsService.remove(id);
   }
 
+  @Post('companies/:companyId/resolutions/:id/duplicate')
+  @RequirePermission('resolutions.create')
+  duplicate(
+    @Param('companyId') companyId: string,
+    @Param('id') id: string,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.resolutionsService.duplicate(id, userId);
+  }
+
   @Post('companies/:companyId/resolutions/:id/signers')
   @RequirePermission('resolutions.edit')
   addSigners(

@@ -257,6 +257,42 @@ export class ResolutionsService {
     return { message: 'Resolution deleted successfully' };
   }
 
+  async duplicate(id: string, userId: string) {
+    const original = await this.findOne(id);
+    const newNumber = await this.generateResolutionNumber(original.companyId);
+
+    return this.prisma.resolution.create({
+      data: {
+        companyId: original.companyId,
+        number: newNumber,
+        title: `Copy of ${original.title}`,
+        content: original.content,
+        category: original.category,
+        status: ResolutionStatus.DRAFT,
+        createdById: userId,
+      },
+      include: {
+        company: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        decision: {
+          include: {
+            meeting: {
+              select: {
+                id: true,
+                title: true,
+                scheduledAt: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
   async getNextResolutionNumber(companyId: string): Promise<string> {
     return this.generateResolutionNumber(companyId);
   }
