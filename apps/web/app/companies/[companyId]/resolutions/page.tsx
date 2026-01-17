@@ -15,6 +15,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -28,16 +30,32 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Vote, Plus, Loader2, CheckCircle2, Clock, XCircle, ScrollText, MoreHorizontal, FileText, Trash2, Calendar } from "lucide-react";
+import { Vote, Plus, Loader2, CheckCircle2, Clock, XCircle, ScrollText, MoreHorizontal, FileText, Trash2, Calendar, PenTool, Users, AlertCircle } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { usePermission } from "@/lib/permissions";
+import { SignerSelector } from "@/components/signer-selector";
+import { SigningStatus } from "@/components/signing-status";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
 
 type ResolutionStatus = "DRAFT" | "PROPOSED" | "PASSED" | "REJECTED" | "TABLED";
 type ResolutionCategory = "FINANCIAL" | "GOVERNANCE" | "HR" | "OPERATIONS" | "STRATEGIC" | "OTHER";
+
+interface Signature {
+  id: string;
+  status: "PENDING" | "SIGNED" | "DECLINED";
+  signedAt: string | null;
+  order: number;
+  user: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    imageUrl?: string | null;
+    signatureUrl?: string | null;
+  };
+}
 
 interface Resolution {
   id: string;
@@ -48,8 +66,22 @@ interface Resolution {
   category: ResolutionCategory;
   status: ResolutionStatus;
   effectiveDate: string | null;
+  includeStamp?: boolean;
   createdAt: string;
   updatedAt: string;
+  signatures?: Signature[];
+}
+
+interface CompanyMember {
+  id: string;
+  userId: string;
+  user: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    imageUrl?: string | null;
+  };
+  title?: string | null;
 }
 
 const statusColors: Record<ResolutionStatus, string> = {
@@ -70,8 +102,9 @@ const categoryLabels: Record<ResolutionCategory, string> = {
 };
 
 export default function ResolutionsPage() {
-  const { getToken } = useAuth();
+  const { getToken, userId } = useAuth();
   const params = useParams();
+  const router = useRouter();
   const companyId = params.companyId as string;
 
   const canCreate = usePermission("resolutions.create");
@@ -89,6 +122,16 @@ export default function ResolutionsPage() {
   const [category, setCategory] = useState<ResolutionCategory>("GOVERNANCE");
   const [effectiveDate, setEffectiveDate] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Signature management state
+  const [signerDialogOpen, setSignerDialogOpen] = useState(false);
+  const [members, setMembers] = useState<CompanyMember[]>([]);
+  const [selectedSigners, setSelectedSigners] = useState<string[]>([]);
+  const [includeStamp, setIncludeStamp] = useState(false);
+  const [isLoadingMembers, setIsLoadingMembers] = useState(false);
+  const [isSavingSigners, setIsSavingSigners] = useState(false);
+  const [isSigningResolution, setIsSigningResolution] = useState(false);
+  const [userSignatureUrl, setUserSignatureUrl] = useState<string | null>(null);
 
   const fetchResolutions = useCallback(async (showLoading = true) => {
     try {
@@ -114,6 +157,170 @@ export default function ResolutionsPage() {
   useEffect(() => {
     fetchResolutions();
   }, [fetchResolutions]);
+
+  // Fetch user signature URL on mount
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const token = await getToken();
+        const res = await fetch(`${API_URL}/users/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const userData = await res.json();
+          setUserSignatureUrl(userData.signatureUrl || null);
+        }
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+      }
+    };
+    fetchUserData();
+  }, [getToken]);
+
+  const fetchMembers = async () => {
+    try {
+      setIsLoadingMembers(true);
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/companies/${companyId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const company = await res.json();
+        setMembers(company.members || []);
+      }
+    } catch (error) {
+      console.error("Error fetching members:", error);
+    } finally {
+      setIsLoadingMembers(false);
+    }
+  };
+
+  const fetchResolutionDetails = async (resolutionId: string): Promise<Resolution | null> => {
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/companies/${companyId}/resolutions/${resolutionId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (error) {
+      console.error("Error fetching resolution details:", error);
+    }
+    return null;
+  };
+
+  const handleOpenResolution = async (resolution: Resolution) => {
+    // Fetch full resolution details including signatures
+    const details = await fetchResolutionDetails(resolution.id);
+    setSelectedResolution(details || resolution);
+    setViewDialogOpen(true);
+  };
+
+  const handleOpenSignerDialog = async () => {
+    await fetchMembers();
+    // Pre-populate selected signers from current resolution signatures
+    if (selectedResolution?.signatures) {
+      setSelectedSigners(selectedResolution.signatures.map(s => s.user.id));
+    } else {
+      setSelectedSigners([]);
+    }
+    setIncludeStamp(selectedResolution?.includeStamp || false);
+    setSignerDialogOpen(true);
+  };
+
+  const handleSaveSigners = async () => {
+    if (!selectedResolution) return;
+
+    try {
+      setIsSavingSigners(true);
+      const token = await getToken();
+
+      // First, remove any signers that are no longer selected
+      const currentSignerIds = selectedResolution.signatures?.map(s => s.user.id) || [];
+      const signersToRemove = currentSignerIds.filter(id => !selectedSigners.includes(id));
+
+      for (const signerUserId of signersToRemove) {
+        await fetch(`${API_URL}/companies/${companyId}/resolutions/${selectedResolution.id}/signers/${signerUserId}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+
+      // Add new signers
+      const signersToAdd = selectedSigners.filter(id => !currentSignerIds.includes(id));
+      if (signersToAdd.length > 0 || includeStamp !== selectedResolution.includeStamp) {
+        await fetch(`${API_URL}/companies/${companyId}/resolutions/${selectedResolution.id}/signers`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            signers: signersToAdd.map((userId, index) => ({ userId, order: currentSignerIds.length + index })),
+            includeStamp,
+          }),
+        });
+      }
+
+      // Refresh resolution details
+      const updatedResolution = await fetchResolutionDetails(selectedResolution.id);
+      if (updatedResolution) {
+        setSelectedResolution(updatedResolution);
+      }
+
+      setSignerDialogOpen(false);
+    } catch (error) {
+      console.error("Error saving signers:", error);
+      alert("Failed to save signers. Please try again.");
+    } finally {
+      setIsSavingSigners(false);
+    }
+  };
+
+  const handleSignResolution = async () => {
+    if (!selectedResolution) return;
+
+    if (!userSignatureUrl) {
+      alert("Please upload your signature in Settings before signing resolutions.");
+      router.push(`/companies/${companyId}/settings`);
+      return;
+    }
+
+    try {
+      setIsSigningResolution(true);
+      const token = await getToken();
+
+      const response = await fetch(`${API_URL}/companies/${companyId}/resolutions/${selectedResolution.id}/sign`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to sign resolution");
+      }
+
+      // Refresh resolution details
+      const updatedResolution = await fetchResolutionDetails(selectedResolution.id);
+      if (updatedResolution) {
+        setSelectedResolution(updatedResolution);
+      }
+    } catch (error) {
+      console.error("Error signing resolution:", error);
+      alert(error instanceof Error ? error.message : "Failed to sign resolution. Please try again.");
+    } finally {
+      setIsSigningResolution(false);
+    }
+  };
+
+  // Check if current user is a pending signer
+  const isCurrentUserPendingSigner = selectedResolution?.signatures?.some(
+    s => s.user.id === userId && s.status === "PENDING"
+  );
 
   const resetForm = () => {
     setTitle("");
@@ -325,10 +532,7 @@ export default function ResolutionsPage() {
                 <div
                   key={resolution.id}
                   className="flex items-center justify-between rounded-lg border p-4 cursor-pointer hover:bg-muted/50 transition-colors"
-                  onClick={() => {
-                    setSelectedResolution(resolution);
-                    setViewDialogOpen(true);
-                  }}
+                  onClick={() => handleOpenResolution(resolution)}
                 >
                   <div className="flex items-center gap-4 flex-1">
                     <div className="rounded-lg bg-purple-100 p-2">
@@ -514,7 +718,7 @@ export default function ResolutionsPage() {
 
       {/* View Resolution Dialog */}
       <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           {selectedResolution && (
             <>
               <DialogHeader>
@@ -535,45 +739,162 @@ export default function ResolutionsPage() {
                   </div>
                 </DialogDescription>
               </DialogHeader>
-              <div className="py-4">
-                <h4 className="font-medium mb-2">Resolution Content</h4>
-                <div className="rounded-lg border bg-muted/50 p-4 whitespace-pre-wrap text-sm">
-                  {selectedResolution.content}
+              <div className="py-4 space-y-4">
+                <div>
+                  <h4 className="font-medium mb-2">Resolution Content</h4>
+                  <div className="rounded-lg border bg-muted/50 p-4 whitespace-pre-wrap text-sm">
+                    {selectedResolution.content}
+                  </div>
                 </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setViewDialogOpen(false)}>
-                  Close
-                </Button>
-                {canChangeStatus && (selectedResolution.status === "DRAFT" || selectedResolution.status === "PROPOSED") && (
-                  <>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        handleUpdateStatus(selectedResolution.id, "PASSED");
-                        setViewDialogOpen(false);
-                      }}
-                      className="border-green-500 text-green-600 hover:bg-green-50"
-                    >
-                      <CheckCircle2 className="mr-2 h-4 w-4" />
-                      Pass
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        handleUpdateStatus(selectedResolution.id, "REJECTED");
-                        setViewDialogOpen(false);
-                      }}
-                      className="border-red-500 text-red-600 hover:bg-red-50"
-                    >
-                      <XCircle className="mr-2 h-4 w-4" />
-                      Reject
-                    </Button>
-                  </>
+
+                {/* Signatures Section */}
+                {selectedResolution.signatures && selectedResolution.signatures.length > 0 && (
+                  <div>
+                    <Separator className="my-4" />
+                    <SigningStatus signatures={selectedResolution.signatures} />
+                    {selectedResolution.includeStamp && (
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Company stamp will be included on the signed document
+                      </p>
+                    )}
+                  </div>
                 )}
+
+                {/* User needs to upload signature message */}
+                {isCurrentUserPendingSigner && !userSignatureUrl && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+                      <div>
+                        <p className="font-medium text-amber-800">Signature Required</p>
+                        <p className="text-sm text-amber-700">
+                          You need to upload your signature before you can sign this resolution.{" "}
+                          <button
+                            onClick={() => router.push(`/companies/${companyId}/settings`)}
+                            className="underline hover:no-underline"
+                          >
+                            Go to Settings
+                          </button>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <DialogFooter className="flex-col sm:flex-row gap-2">
+                <div className="flex gap-2 w-full sm:w-auto">
+                  <Button variant="outline" onClick={() => setViewDialogOpen(false)}>
+                    Close
+                  </Button>
+
+                  {/* Manage Signers Button - only for users with edit permission and non-passed resolutions */}
+                  {canEdit && selectedResolution.status !== "PASSED" && (
+                    <Button variant="outline" onClick={handleOpenSignerDialog}>
+                      <Users className="mr-2 h-4 w-4" />
+                      Manage Signers
+                    </Button>
+                  )}
+                </div>
+
+                <div className="flex gap-2 w-full sm:w-auto">
+                  {/* Sign Resolution Button - only for pending signers */}
+                  {isCurrentUserPendingSigner && (
+                    <Button
+                      onClick={handleSignResolution}
+                      disabled={isSigningResolution || !userSignatureUrl}
+                      className="bg-purple-600 hover:bg-purple-700"
+                    >
+                      {isSigningResolution ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <PenTool className="mr-2 h-4 w-4" />
+                      )}
+                      Sign Resolution
+                    </Button>
+                  )}
+
+                  {canChangeStatus && (selectedResolution.status === "DRAFT" || selectedResolution.status === "PROPOSED") && (
+                    <>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          handleUpdateStatus(selectedResolution.id, "PASSED");
+                          setViewDialogOpen(false);
+                        }}
+                        className="border-green-500 text-green-600 hover:bg-green-50"
+                      >
+                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                        Pass
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          handleUpdateStatus(selectedResolution.id, "REJECTED");
+                          setViewDialogOpen(false);
+                        }}
+                        className="border-red-500 text-red-600 hover:bg-red-50"
+                      >
+                        <XCircle className="mr-2 h-4 w-4" />
+                        Reject
+                      </Button>
+                    </>
+                  )}
+                </div>
               </DialogFooter>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Manage Signers Dialog */}
+      <Dialog open={signerDialogOpen} onOpenChange={setSignerDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manage Signers</DialogTitle>
+            <DialogDescription>
+              Select the members who need to sign this resolution.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            {isLoadingMembers ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <>
+                <SignerSelector
+                  members={members}
+                  selectedSigners={selectedSigners}
+                  onChange={setSelectedSigners}
+                />
+
+                <Separator />
+
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="include-stamp"
+                    checked={includeStamp}
+                    onCheckedChange={(checked) => setIncludeStamp(checked === true)}
+                  />
+                  <label
+                    htmlFor="include-stamp"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Include company stamp on signed document
+                  </label>
+                </div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSignerDialogOpen(false)} disabled={isSavingSigners}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveSigners} disabled={isSavingSigners || isLoadingMembers}>
+              {isSavingSigners && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Signers
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
