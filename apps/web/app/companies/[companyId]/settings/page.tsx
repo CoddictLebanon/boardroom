@@ -12,10 +12,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Building2, Globe, Calendar, Bell, Link2, CreditCard, Shield, ChevronRight, Users, MapPin, Phone, Mail, ExternalLink, Stamp, Loader2, Upload, X } from "lucide-react";
+import { Building2, Globe, Calendar, Bell, Link2, CreditCard, Shield, ChevronRight, Users, MapPin, Phone, Mail, ExternalLink, Stamp, Loader2, Upload, X, Lock } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { useState, useEffect } from "react";
+import { usePermission } from "@/lib/permissions";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
 
@@ -31,6 +32,13 @@ interface CompanyProfile {
   stampUrl?: string;
 }
 
+interface CompanyMember {
+  role: string;
+  user: {
+    email: string;
+  };
+}
+
 export default function SettingsPage() {
   const params = useParams();
   const router = useRouter();
@@ -38,6 +46,7 @@ export default function SettingsPage() {
   const { user } = useUser();
   const companyId = params.companyId as string;
   const [isOwner, setIsOwner] = useState(false);
+  const canEditSettings = usePermission("company.edit_settings");
 
   // Company profile state
   const [profile, setProfile] = useState<CompanyProfile>({});
@@ -51,6 +60,23 @@ export default function SettingsPage() {
   const [stampPreview, setStampPreview] = useState<string | null>(null);
   const [isUploadingStamp, setIsUploadingStamp] = useState(false);
 
+  // Cleanup blob URL when component unmounts or stampPreview changes
+  useEffect(() => {
+    return () => {
+      if (stampPreview && stampPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(stampPreview);
+      }
+    };
+  }, [stampPreview]);
+
+  // Auto-clear success message after 3 seconds
+  useEffect(() => {
+    if (profileSuccess) {
+      const timeoutId = setTimeout(() => setProfileSuccess(false), 3000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [profileSuccess]);
+
   useEffect(() => {
     const fetchCompanyData = async () => {
       if (!user) return;
@@ -63,7 +89,7 @@ export default function SettingsPage() {
         if (res.ok) {
           const company = await res.json();
           const membership = company.members?.find(
-            (m: any) => m.user.email === user.primaryEmailAddress?.emailAddress
+            (m: CompanyMember) => m.user.email === user.primaryEmailAddress?.emailAddress
           );
           setIsOwner(membership?.role === "OWNER");
 
@@ -113,6 +139,10 @@ export default function SettingsPage() {
         setProfileError("Stamp image must be less than 5MB");
         return;
       }
+      // Revoke old blob URL before creating new one to prevent memory leak
+      if (stampPreview && stampPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(stampPreview);
+      }
       setStampFile(file);
       setStampPreview(URL.createObjectURL(file));
       setProfileError(null);
@@ -120,6 +150,10 @@ export default function SettingsPage() {
   };
 
   const clearStamp = () => {
+    // Revoke blob URL to prevent memory leak
+    if (stampPreview && stampPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(stampPreview);
+    }
     setStampFile(null);
     setStampPreview(null);
     setProfile((prev) => ({ ...prev, stampUrl: "" }));
@@ -228,9 +262,6 @@ export default function SettingsPage() {
 
       setStampFile(null);
       setProfileSuccess(true);
-
-      // Clear success message after 3 seconds
-      setTimeout(() => setProfileSuccess(false), 3000);
     } catch (error) {
       console.error("Error saving profile:", error);
       setProfileError(error instanceof Error ? error.message : "Failed to save profile");
@@ -310,6 +341,16 @@ export default function SettingsPage() {
           {isLoadingProfile ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : !canEditSettings && !isOwner ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="rounded-full bg-muted p-4">
+                <Lock className="h-10 w-10 text-muted-foreground" />
+              </div>
+              <h3 className="mt-4 text-lg font-semibold">View Only</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                You do not have permission to edit company profile settings.
+              </p>
             </div>
           ) : (
             <>
