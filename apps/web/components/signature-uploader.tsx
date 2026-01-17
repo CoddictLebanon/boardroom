@@ -34,9 +34,10 @@ export function SignatureUploader({ currentSignatureUrl, companyId, onUpdate }: 
 
   // Cleanup blob URL when component unmounts or preview changes
   useEffect(() => {
+    const currentPreview = preview;
     return () => {
-      if (preview && preview.startsWith('blob:')) {
-        URL.revokeObjectURL(preview);
+      if (currentPreview && currentPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(currentPreview);
       }
     };
   }, [preview]);
@@ -107,7 +108,8 @@ export function SignatureUploader({ currentSignatureUrl, companyId, onUpdate }: 
       });
 
       if (!response.ok) {
-        throw new Error("Failed to upload signature file");
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Failed to upload signature file");
       }
 
       const doc = await response.json();
