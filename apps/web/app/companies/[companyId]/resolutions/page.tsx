@@ -30,7 +30,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Vote, Plus, Loader2, CheckCircle2, Clock, XCircle, ScrollText, MoreHorizontal, FileText, Trash2, Calendar, PenTool, Users, AlertCircle } from "lucide-react";
+import { Vote, Plus, Loader2, CheckCircle2, Clock, XCircle, ScrollText, MoreHorizontal, FileText, Trash2, Calendar, PenTool, Users, AlertCircle, Download } from "lucide-react";
+import { pdf } from "@react-pdf/renderer";
+import { ResolutionPDF } from "@/components/resolution-pdf";
+import type { CompanyForPDF, ResolutionSignatureForPDF } from "@/lib/types";
 import { useAuth } from "@clerk/nextjs";
 import { useParams, useRouter } from "next/navigation";
 import { format } from "date-fns";
@@ -132,6 +135,8 @@ export default function ResolutionsPage() {
   const [isSavingSigners, setIsSavingSigners] = useState(false);
   const [isSigningResolution, setIsSigningResolution] = useState(false);
   const [userSignatureUrl, setUserSignatureUrl] = useState<string | null>(null);
+  const [companyData, setCompanyData] = useState<CompanyForPDF | null>(null);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   const fetchResolutions = useCallback(async (showLoading = true) => {
     try {
@@ -187,12 +192,52 @@ export default function ResolutionsPage() {
       if (res.ok) {
         const company = await res.json();
         setMembers(company.members || []);
+        // Store company data for PDF generation
+        setCompanyData({
+          name: company.name,
+          logo: company.logo || undefined,
+          address: company.address || undefined,
+          city: company.city || undefined,
+          country: company.country || undefined,
+          registrationNo: company.registrationNo || undefined,
+          phone: company.phone || undefined,
+          website: company.website || undefined,
+          stampUrl: company.stampUrl || undefined,
+        });
       }
     } catch (error) {
       console.error("Error fetching members:", error);
     } finally {
       setIsLoadingMembers(false);
     }
+  };
+
+  const fetchCompanyData = async (): Promise<CompanyForPDF | null> => {
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API_URL}/companies/${companyId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const company = await res.json();
+        const data: CompanyForPDF = {
+          name: company.name,
+          logo: company.logo || undefined,
+          address: company.address || undefined,
+          city: company.city || undefined,
+          country: company.country || undefined,
+          registrationNo: company.registrationNo || undefined,
+          phone: company.phone || undefined,
+          website: company.website || undefined,
+          stampUrl: company.stampUrl || undefined,
+        };
+        setCompanyData(data);
+        return data;
+      }
+    } catch (error) {
+      console.error("Error fetching company data:", error);
+    }
+    return null;
   };
 
   const fetchResolutionDetails = async (resolutionId: string): Promise<Resolution | null> => {
@@ -334,6 +379,65 @@ export default function ResolutionsPage() {
   const isCurrentUserPendingSigner = selectedResolution?.signatures?.some(
     s => s.user.id === userId && s.status === "PENDING"
   );
+
+  const downloadPDF = async () => {
+    if (!selectedResolution) return;
+
+    try {
+      setIsGeneratingPDF(true);
+
+      // Ensure we have company data
+      let company = companyData;
+      if (!company) {
+        company = await fetchCompanyData();
+        if (!company) {
+          throw new Error("Failed to fetch company data");
+        }
+      }
+
+      // Map signatures to the format expected by ResolutionPDF
+      const signatures: ResolutionSignatureForPDF[] = selectedResolution.signatures
+        ?.filter(sig => sig.status === "SIGNED")
+        .map(sig => ({
+          user: {
+            firstName: sig.user.firstName || "",
+            lastName: sig.user.lastName || "",
+            signatureUrl: sig.user.signatureUrl || undefined,
+          },
+          signedAt: sig.signedAt || undefined,
+          // Note: title would need to be fetched from company members if needed
+          title: undefined,
+        })) || [];
+
+      const blob = await pdf(
+        <ResolutionPDF
+          resolution={{
+            number: selectedResolution.number,
+            title: selectedResolution.title,
+            content: selectedResolution.content,
+            category: selectedResolution.category,
+            effectiveDate: selectedResolution.effectiveDate,
+            createdAt: selectedResolution.createdAt,
+          }}
+          company={company}
+          signatures={signatures}
+          includeStamp={selectedResolution.includeStamp}
+        />
+      ).toBlob();
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${selectedResolution.number}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      alert("Failed to generate PDF. Please try again.");
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
 
   const resetForm = () => {
     setTitle("");
@@ -807,6 +911,20 @@ export default function ResolutionsPage() {
                       Manage Signers
                     </Button>
                   )}
+
+                  {/* Download PDF Button */}
+                  <Button
+                    variant="outline"
+                    onClick={downloadPDF}
+                    disabled={isGeneratingPDF}
+                  >
+                    {isGeneratingPDF ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="mr-2 h-4 w-4" />
+                    )}
+                    Download PDF
+                  </Button>
                 </div>
 
                 <div className="flex gap-2 w-full sm:w-auto">
