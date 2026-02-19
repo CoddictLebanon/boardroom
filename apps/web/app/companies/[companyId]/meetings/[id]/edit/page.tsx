@@ -9,7 +9,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -17,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Calendar, Clock, MapPin, Video, Loader2, Users } from "lucide-react";
+import { ArrowLeft, Calendar, Check, Clock, MapPin, Video, Loader2, Users } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { format } from "date-fns";
@@ -119,7 +118,8 @@ export default function EditMeetingPage({
     };
 
     fetchData();
-  }, [id, companyId, getToken]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, companyId]);
 
   const toggleMember = (memberId: string) => {
     setSelectedMemberIds((prev) =>
@@ -382,10 +382,15 @@ export default function EditMeetingPage({
                       }
                     }}
                   >
-                    <Checkbox
-                      checked={selectedMemberIds.length === companyMembers.length && companyMembers.length > 0}
-                      onCheckedChange={() => {}}
-                    />
+                    <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                      selectedMemberIds.length === companyMembers.length && companyMembers.length > 0
+                        ? "bg-primary border-primary"
+                        : "border-input bg-background"
+                    }`}>
+                      {selectedMemberIds.length === companyMembers.length && companyMembers.length > 0 && (
+                        <Check className="h-3 w-3 text-primary-foreground" />
+                      )}
+                    </div>
                     <span className="text-sm font-medium">
                       {selectedMemberIds.length === companyMembers.length
                         ? "Deselect all"
@@ -404,11 +409,10 @@ export default function EditMeetingPage({
                         }`}
                         onClick={() => toggleMember(member.id)}
                       >
-                        <div onClick={(e) => e.stopPropagation()}>
-                          <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={() => toggleMember(member.id)}
-                          />
+                        <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                          isSelected ? "bg-primary border-primary" : "border-input bg-background"
+                        }`}>
+                          {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
                         </div>
                         <Avatar className="h-7 w-7">
                           {member.user?.imageUrl && (
