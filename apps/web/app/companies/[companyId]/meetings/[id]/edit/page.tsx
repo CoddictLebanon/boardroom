@@ -404,11 +404,12 @@ export default function EditMeetingPage({
                         }`}
                         onClick={() => toggleMember(member.id)}
                       >
-                        <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={() => toggleMember(member.id)}
-                          onClick={(e) => e.stopPropagation()}
-                        />
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleMember(member.id)}
+                          />
+                        </div>
                         <Avatar className="h-7 w-7">
                           {member.user?.imageUrl && (
                             <AvatarImage src={member.user.imageUrl} />
