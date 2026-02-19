@@ -103,6 +103,18 @@ export class MeetingsController {
     return this.meetingsService.addAgendaItem(id, userId, createAgendaItemDto);
   }
 
+  // Reorder must come before :itemId to avoid matching "reorder" as an itemId
+  @Put('companies/:companyId/meetings/:id/agenda/reorder')
+  @RequirePermission('meetings.edit')
+  async reorderAgendaItems(
+    @Param('companyId') companyId: string,
+    @Param('id') id: string,
+    @Body() body: { itemIds: string[] },
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.meetingsService.reorderAgendaItems(id, body.itemIds, userId);
+  }
+
   @Put('companies/:companyId/meetings/:id/agenda/:itemId')
   @RequirePermission('meetings.edit')
   async updateAgendaItem(

@@ -989,6 +989,28 @@ export class MeetingsService {
     return decisions;
   }
 
+  async reorderAgendaItems(meetingId: string, itemIds: string[], userId: string) {
+    await this.getMeeting(meetingId, userId);
+
+    const updates = itemIds.map((itemId, index) =>
+      this.prisma.agendaItem.update({
+        where: { id: itemId },
+        data: { order: index },
+      }),
+    );
+
+    const items = await this.prisma.$transaction(updates);
+
+    try {
+      this.meetingsGateway.emitToMeeting(meetingId, 'agenda:reordered', { itemIds });
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to emit agenda:reordered event: ${errorMessage}`);
+    }
+
+    return items;
+  }
+
   async completeMeeting(meetingId: string, userId: string) {
     const meeting = await this.getMeeting(meetingId, userId);
 
