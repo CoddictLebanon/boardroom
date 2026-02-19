@@ -513,6 +513,24 @@ export class MeetingsService {
     return attendees;
   }
 
+  async removeAttendee(meetingId: string, attendeeId: string, userId: string) {
+    const meeting = await this.getMeeting(meetingId, userId);
+
+    if (meeting.status === MeetingStatus.COMPLETED) {
+      throw new BadRequestException('Cannot remove attendees from a completed meeting');
+    }
+
+    const attendee = await this.prisma.meetingAttendee.findFirst({
+      where: { id: attendeeId, meetingId },
+    });
+
+    if (!attendee) {
+      throw new NotFoundException('Attendee not found');
+    }
+
+    return this.prisma.meetingAttendee.delete({ where: { id: attendeeId } });
+  }
+
   async markAttendance(
     meetingId: string,
     attendeeId: string,

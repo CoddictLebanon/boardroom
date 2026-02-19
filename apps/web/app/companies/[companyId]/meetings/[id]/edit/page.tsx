@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -15,12 +17,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Calendar, Clock, MapPin, Video, Loader2 } from "lucide-react";
+import { ArrowLeft, Calendar, Clock, MapPin, Video, Loader2, Users } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { format } from "date-fns";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
+
+interface CompanyMember {
+  id: string;
+  userId: string;
+  title: string | null;
+  role: string;
+  user?: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string;
+    imageUrl?: string | null;
+  };
+}
+
+function getInitials(firstName?: string | null, lastName?: string | null) {
+  return `${firstName?.[0] || ""}${lastName?.[0] || ""}`.toUpperCase() || "?";
+}
 
 export default function EditMeetingPage({
   params,
@@ -45,23 +65,27 @@ export default function EditMeetingPage({
     videoLink: "",
   });
 
-  // Fetch meeting data on mount
+  // Attendee state
+  const [companyMembers, setCompanyMembers] = useState<CompanyMember[]>([]);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  // Maps memberId → attendeeId (MeetingAttendee.id) for existing attendees
+  const [existingAttendeeMap, setExistingAttendeeMap] = useState<Record<string, string>>({});
+
   useEffect(() => {
-    const fetchMeeting = async () => {
+    const fetchData = async () => {
       try {
         setIsLoading(true);
         const token = await getToken();
-        const response = await fetch(`${API_URL}/companies/${companyId}/meetings/${id}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const headers = { Authorization: `Bearer ${token}` };
 
-        if (!response.ok) {
-          throw new Error("Failed to fetch meeting");
-        }
+        const [meetingRes, companyRes] = await Promise.all([
+          fetch(`${API_URL}/companies/${companyId}/meetings/${id}`, { headers }),
+          fetch(`${API_URL}/companies/${companyId}`, { headers }),
+        ]);
 
-        const meeting = await response.json();
+        if (!meetingRes.ok) throw new Error("Failed to fetch meeting");
+
+        const meeting = await meetingRes.json();
         const scheduledDate = new Date(meeting.scheduledAt);
 
         setFormData({
@@ -73,16 +97,35 @@ export default function EditMeetingPage({
           location: meeting.location || "",
           videoLink: meeting.videoLink || "",
         });
+
+        // Build attendee map: memberId → attendeeId
+        const attendeeMap: Record<string, string> = {};
+        for (const a of meeting.attendees || []) {
+          attendeeMap[a.memberId] = a.id;
+        }
+        setExistingAttendeeMap(attendeeMap);
+        setSelectedMemberIds(Object.keys(attendeeMap));
+
+        if (companyRes.ok) {
+          const company = await companyRes.json();
+          setCompanyMembers(company.members || []);
+        }
       } catch (err) {
-        console.error("Error fetching meeting:", err);
+        console.error("Error fetching data:", err);
         setError("Failed to load meeting. Please try again.");
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchMeeting();
+    fetchData();
   }, [id, companyId, getToken]);
+
+  const toggleMember = (memberId: string) => {
+    setSelectedMemberIds((prev) =>
+      prev.includes(memberId) ? prev.filter((m) => m !== memberId) : [...prev, memberId]
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,14 +139,16 @@ export default function EditMeetingPage({
     try {
       setIsSaving(true);
       const token = await getToken();
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      };
       const scheduledAt = new Date(`${formData.date}T${formData.time}`).toISOString();
 
-      const response = await fetch(`${API_URL}/companies/${companyId}/meetings/${id}`, {
+      // 1. Update meeting details
+      const meetingRes = await fetch(`${API_URL}/companies/${companyId}/meetings/${id}`, {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers,
         body: JSON.stringify({
           title: formData.title,
           description: formData.description || undefined,
@@ -114,9 +159,31 @@ export default function EditMeetingPage({
         }),
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to update meeting");
-      }
+      if (!meetingRes.ok) throw new Error("Failed to update meeting");
+
+      // 2. Diff attendees: find additions and removals
+      const originalMemberIds = Object.keys(existingAttendeeMap);
+      const toAdd = selectedMemberIds.filter((mid) => !originalMemberIds.includes(mid));
+      const toRemove = originalMemberIds.filter((mid) => !selectedMemberIds.includes(mid));
+
+      await Promise.all([
+        // Add new attendees
+        toAdd.length > 0
+          ? fetch(`${API_URL}/companies/${companyId}/meetings/${id}/attendees`, {
+              method: "POST",
+              headers,
+              body: JSON.stringify({ memberIds: toAdd }),
+            })
+          : Promise.resolve(),
+
+        // Remove de-selected attendees
+        ...toRemove.map((memberId) =>
+          fetch(
+            `${API_URL}/companies/${companyId}/meetings/${id}/attendees/${existingAttendeeMap[memberId]}`,
+            { method: "DELETE", headers }
+          )
+        ),
+      ]);
 
       router.push(`/companies/${companyId}/meetings/${id}`);
     } catch (err) {
@@ -165,22 +232,17 @@ export default function EditMeetingPage({
         </Button>
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Edit Meeting</h1>
-          <p className="text-muted-foreground">
-            Update meeting details
-          </p>
+          <p className="text-muted-foreground">Update meeting details</p>
         </div>
       </div>
 
-      {/* Form */}
       <form onSubmit={handleSubmit}>
         <div className="space-y-6">
           {/* Meeting Details Card */}
           <Card>
             <CardHeader>
               <CardTitle>Meeting Details</CardTitle>
-              <CardDescription>
-                Update the information for your meeting
-              </CardDescription>
+              <CardDescription>Update the information for your meeting</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Title */}
@@ -290,6 +352,88 @@ export default function EditMeetingPage({
                   />
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Attendees Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Attendees
+              </CardTitle>
+              <CardDescription>
+                Select who should attend this meeting
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {companyMembers.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No members found.</p>
+              ) : (
+                <div className="space-y-2">
+                  {/* Select all toggle */}
+                  <div
+                    className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => {
+                      if (selectedMemberIds.length === companyMembers.length) {
+                        setSelectedMemberIds([]);
+                      } else {
+                        setSelectedMemberIds(companyMembers.map((m) => m.id));
+                      }
+                    }}
+                  >
+                    <Checkbox
+                      checked={selectedMemberIds.length === companyMembers.length && companyMembers.length > 0}
+                      onCheckedChange={() => {}}
+                    />
+                    <span className="text-sm font-medium">
+                      {selectedMemberIds.length === companyMembers.length
+                        ? "Deselect all"
+                        : "Select all"}
+                    </span>
+                  </div>
+
+                  {/* Member list */}
+                  {companyMembers.map((member) => {
+                    const isSelected = selectedMemberIds.includes(member.id);
+                    return (
+                      <div
+                        key={member.id}
+                        className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-muted/50 transition-colors ${
+                          isSelected ? "bg-muted/30" : ""
+                        }`}
+                        onClick={() => toggleMember(member.id)}
+                      >
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleMember(member.id)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <Avatar className="h-7 w-7">
+                          {member.user?.imageUrl && (
+                            <AvatarImage src={member.user.imageUrl} />
+                          )}
+                          <AvatarFallback className="text-[10px]">
+                            {getInitials(member.user?.firstName, member.user?.lastName)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm">
+                          {member.user?.firstName} {member.user?.lastName}
+                        </span>
+                        <span className="text-xs text-muted-foreground ml-auto">
+                          {member.title || member.role}
+                        </span>
+                      </div>
+                    );
+                  })}
+
+                  {selectedMemberIds.length > 0 && (
+                    <p className="text-xs text-muted-foreground pt-1">
+                      {selectedMemberIds.length} member{selectedMemberIds.length !== 1 ? "s" : ""} selected
+                    </p>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 

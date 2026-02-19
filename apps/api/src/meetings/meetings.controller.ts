@@ -138,6 +138,17 @@ export class MeetingsController {
     return this.meetingsService.addAttendees(id, userId, addAttendeesDto);
   }
 
+  @Delete('companies/:companyId/meetings/:id/attendees/:attendeeId')
+  @RequirePermission('meetings.edit')
+  async removeAttendee(
+    @Param('companyId') companyId: string,
+    @Param('id') id: string,
+    @Param('attendeeId') attendeeId: string,
+    @CurrentUser('userId') userId: string,
+  ) {
+    return this.meetingsService.removeAttendee(id, attendeeId, userId);
+  }
+
   @Put('companies/:companyId/meetings/:id/attendees/:attendeeId')
   @RequirePermission('meetings.edit')
   async markAttendance(
