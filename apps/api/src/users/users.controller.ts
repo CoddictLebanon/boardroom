@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Put,
+  Post,
   Body,
   UseGuards,
   UsePipes,
@@ -10,7 +11,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { UpdateSignatureDto } from './dto';
+import { UpdateSignatureDto, UpdateProfileDto } from './dto';
 import { CurrentUser } from '../auth/decorators';
 import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
 
@@ -25,6 +26,15 @@ export class UsersController {
     return this.usersService.getMe(userId);
   }
 
+  @Put('me')
+  @HttpCode(HttpStatus.OK)
+  async updateProfile(
+    @CurrentUser('userId') userId: string,
+    @Body() dto: UpdateProfileDto,
+  ) {
+    return this.usersService.updateProfile(userId, dto);
+  }
+
   @Put('me/signature')
   @HttpCode(HttpStatus.OK)
   async updateSignature(
@@ -32,5 +42,15 @@ export class UsersController {
     @Body() dto: UpdateSignatureDto,
   ) {
     return this.usersService.updateSignature(userId, dto.signatureUrl ?? null);
+  }
+
+  /**
+   * Get fresh (non-expired) signature URLs for multiple users.
+   * Used when generating PDFs that need to embed signature images.
+   */
+  @Post('signature-urls')
+  @HttpCode(HttpStatus.OK)
+  async getSignatureUrls(@Body('userIds') userIds: string[]) {
+    return this.usersService.getFreshSignatureUrls(userIds);
   }
 }

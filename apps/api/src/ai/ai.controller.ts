@@ -5,7 +5,7 @@ import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
 import { PermissionGuard, RequirePermission } from '../permissions';
 
-@Controller('api/v1/ai')
+@Controller('ai')
 @UseGuards(ClerkAuthGuard, PermissionGuard)
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
 export class AiController {

@@ -258,6 +258,7 @@ export class CompaniesService {
     return this.prisma.company.update({
       where: { id: companyId },
       data: {
+        logo: dto.logo,
         address: dto.address,
         city: dto.city,
         country: dto.country,

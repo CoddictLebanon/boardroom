@@ -4,17 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Building2, Globe, Calendar, Bell, Link2, CreditCard, Shield, ChevronRight, Users, MapPin, Phone, Stamp, Loader2, Upload, X, Lock } from "lucide-react";
-import { SignatureUploader } from "@/components/signature-uploader";
-import { useParams, useRouter } from "next/navigation";
+import { Building2, MapPin, Phone, Loader2, Upload, X, Lock, ImageIcon, Stamp } from "lucide-react";
+import { useParams } from "next/navigation";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { useState, useEffect } from "react";
 import { usePermission } from "@/lib/permissions";
@@ -31,6 +22,7 @@ interface CompanyProfile {
   companyEmail?: string;
   website?: string;
   stampUrl?: string;
+  logo?: string;
 }
 
 interface CompanyMember {
@@ -40,9 +32,8 @@ interface CompanyMember {
   };
 }
 
-export default function SettingsPage() {
+export default function CompanyProfilePage() {
   const params = useParams();
-  const router = useRouter();
   const { getToken } = useAuth();
   const { user } = useUser();
   const companyId = params.companyId as string;
@@ -61,10 +52,12 @@ export default function SettingsPage() {
   const [stampPreview, setStampPreview] = useState<string | null>(null);
   const [isUploadingStamp, setIsUploadingStamp] = useState(false);
 
-  // User signature state
-  const [userSignatureUrl, setUserSignatureUrl] = useState<string | null>(null);
+  // Logo upload state
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
 
-  // Cleanup blob URL when component unmounts or stampPreview changes
+  // Cleanup blob URLs
   useEffect(() => {
     return () => {
       if (stampPreview && stampPreview.startsWith('blob:')) {
@@ -73,32 +66,21 @@ export default function SettingsPage() {
     };
   }, [stampPreview]);
 
-  // Auto-clear success message after 3 seconds
+  useEffect(() => {
+    return () => {
+      if (logoPreview && logoPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(logoPreview);
+      }
+    };
+  }, [logoPreview]);
+
+  // Auto-clear success message
   useEffect(() => {
     if (profileSuccess) {
       const timeoutId = setTimeout(() => setProfileSuccess(false), 3000);
       return () => clearTimeout(timeoutId);
     }
   }, [profileSuccess]);
-
-  // Fetch user's signature URL
-  useEffect(() => {
-    const fetchUserData = async () => {
-      try {
-        const token = await getToken();
-        const res = await fetch(`${API_URL}/users/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const userData = await res.json();
-          setUserSignatureUrl(userData.signatureUrl || null);
-        }
-      } catch (error) {
-        console.error("Error fetching user data:", error);
-      }
-    };
-    fetchUserData();
-  }, [getToken]);
 
   useEffect(() => {
     const fetchCompanyData = async () => {
@@ -116,7 +98,6 @@ export default function SettingsPage() {
           );
           setIsOwner(membership?.role === "OWNER");
 
-          // Set profile data from company
           setProfile({
             address: company.address || "",
             city: company.city || "",
@@ -127,11 +108,11 @@ export default function SettingsPage() {
             companyEmail: company.companyEmail || "",
             website: company.website || "",
             stampUrl: company.stampUrl || "",
+            logo: company.logo || "",
           });
 
-          if (company.stampUrl) {
-            setStampPreview(company.stampUrl);
-          }
+          if (company.stampUrl) setStampPreview(company.stampUrl);
+          if (company.logo) setLogoPreview(company.logo);
         }
       } catch (error) {
         console.error("Error fetching company data:", error);
@@ -152,17 +133,14 @@ export default function SettingsPage() {
   const handleStampFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Validate file type
       if (!file.type.startsWith("image/")) {
         setProfileError("Please upload an image file for the stamp");
         return;
       }
-      // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
         setProfileError("Stamp image must be less than 5MB");
         return;
       }
-      // Revoke old blob URL before creating new one to prevent memory leak
       if (stampPreview && stampPreview.startsWith('blob:')) {
         URL.revokeObjectURL(stampPreview);
       }
@@ -173,13 +151,41 @@ export default function SettingsPage() {
   };
 
   const clearStamp = () => {
-    // Revoke blob URL to prevent memory leak
     if (stampPreview && stampPreview.startsWith('blob:')) {
       URL.revokeObjectURL(stampPreview);
     }
     setStampFile(null);
     setStampPreview(null);
     setProfile((prev) => ({ ...prev, stampUrl: "" }));
+  };
+
+  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith("image/")) {
+        setProfileError("Please upload an image file for the logo");
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        setProfileError("Logo image must be less than 5MB");
+        return;
+      }
+      if (logoPreview && logoPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(logoPreview);
+      }
+      setLogoFile(file);
+      setLogoPreview(URL.createObjectURL(file));
+      setProfileError(null);
+    }
+  };
+
+  const clearLogo = () => {
+    if (logoPreview && logoPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(logoPreview);
+    }
+    setLogoFile(null);
+    setLogoPreview(null);
+    setProfile((prev) => ({ ...prev, logo: "" }));
   };
 
   const uploadStamp = async (): Promise<string | null> => {
@@ -196,18 +202,13 @@ export default function SettingsPage() {
 
       const response = await fetch(`${API_URL}/companies/${companyId}/documents`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to upload stamp");
-      }
+      if (!response.ok) throw new Error("Failed to upload stamp");
 
       const doc = await response.json();
-      // Get the download URL for the stamp
       const downloadRes = await fetch(`${API_URL}/companies/${companyId}/documents/${doc.id}/download`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -216,13 +217,50 @@ export default function SettingsPage() {
         const { url } = await downloadRes.json();
         return url;
       }
-
       return doc.storageKey;
     } catch (error) {
       console.error("Error uploading stamp:", error);
       throw error;
     } finally {
       setIsUploadingStamp(false);
+    }
+  };
+
+  const uploadLogo = async (): Promise<string | null> => {
+    if (!logoFile) return profile.logo || null;
+
+    try {
+      setIsUploadingLogo(true);
+      const token = await getToken();
+
+      const formData = new FormData();
+      formData.append("file", logoFile);
+      formData.append("name", `company-logo-${Date.now()}`);
+      formData.append("type", "GOVERNANCE");
+
+      const response = await fetch(`${API_URL}/companies/${companyId}/documents`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error("Failed to upload logo");
+
+      const doc = await response.json();
+      const downloadRes = await fetch(`${API_URL}/companies/${companyId}/documents/${doc.id}/download`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (downloadRes.ok) {
+        const { url } = await downloadRes.json();
+        return url;
+      }
+      return doc.storageKey;
+    } catch (error) {
+      console.error("Error uploading logo:", error);
+      throw error;
+    } finally {
+      setIsUploadingLogo(false);
     }
   };
 
@@ -234,10 +272,14 @@ export default function SettingsPage() {
 
       const token = await getToken();
 
-      // Upload stamp if a new file was selected
       let stampUrl = profile.stampUrl;
       if (stampFile) {
         stampUrl = await uploadStamp() || undefined;
+      }
+
+      let logo = profile.logo;
+      if (logoFile) {
+        logo = await uploadLogo() || undefined;
       }
 
       const payload = {
@@ -250,6 +292,7 @@ export default function SettingsPage() {
         companyEmail: profile.companyEmail || undefined,
         website: profile.website || undefined,
         stampUrl: stampUrl || undefined,
+        logo: logo || undefined,
       };
 
       const response = await fetch(`${API_URL}/companies/${companyId}/profile`, {
@@ -277,13 +320,14 @@ export default function SettingsPage() {
         companyEmail: updated.companyEmail || "",
         website: updated.website || "",
         stampUrl: updated.stampUrl || "",
+        logo: updated.logo || "",
       });
 
-      if (updated.stampUrl) {
-        setStampPreview(updated.stampUrl);
-      }
+      if (updated.stampUrl) setStampPreview(updated.stampUrl);
+      if (updated.logo) setLogoPreview(updated.logo);
 
       setStampFile(null);
+      setLogoFile(null);
       setProfileSuccess(true);
     } catch (error) {
       console.error("Error saving profile:", error);
@@ -293,68 +337,45 @@ export default function SettingsPage() {
     }
   };
 
+  if (isLoadingProfile) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!canEditSettings && !isOwner) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+          <div className="rounded-full bg-muted p-4">
+            <Lock className="h-10 w-10 text-muted-foreground" />
+          </div>
+          <h3 className="mt-4 text-lg font-semibold">View Only</h3>
+          <p className="mt-2 text-sm text-muted-foreground">
+            You do not have permission to edit company profile settings.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground">
-          Manage your company and account settings
-        </p>
-      </div>
-
-      {/* Personal Settings - User Signature */}
-      <SignatureUploader
-        currentSignatureUrl={userSignatureUrl}
-        companyId={companyId}
-        onUpdate={(url) => setUserSignatureUrl(url)}
-      />
-
-      {/* Members */}
-      <Card
-        className="cursor-pointer transition-colors hover:bg-muted/50"
-        onClick={() => router.push(`/companies/${companyId}/settings/members`)}
-      >
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="rounded-lg bg-emerald-100 p-2">
-                <Users className="h-5 w-5 text-emerald-600" />
-              </div>
-              <div>
-                <CardTitle>Members</CardTitle>
-                <CardDescription>Manage company members and invitations</CardDescription>
-              </div>
-            </div>
-            <ChevronRight className="h-5 w-5 text-muted-foreground" />
-          </div>
-        </CardHeader>
-      </Card>
-
-      {/* Role Permissions - Owner Only */}
-      {isOwner && (
-        <Card
-          className="cursor-pointer transition-colors hover:bg-muted/50"
-          onClick={() => router.push(`/companies/${companyId}/settings/permissions`)}
-        >
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="rounded-lg bg-indigo-100 p-2">
-                  <Shield className="h-5 w-5 text-indigo-600" />
-                </div>
-                <div>
-                  <CardTitle>Role Permissions</CardTitle>
-                  <CardDescription>Configure what each role can do in your company</CardDescription>
-                </div>
-              </div>
-              <ChevronRight className="h-5 w-5 text-muted-foreground" />
-            </div>
-          </CardHeader>
-        </Card>
+      {/* Error/Success messages */}
+      {profileError && (
+        <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
+          {profileError}
+        </div>
+      )}
+      {profileSuccess && (
+        <div className="rounded-md bg-green-100 p-3 text-sm text-green-700">
+          Company profile saved successfully
+        </div>
       )}
 
-      {/* Company Profile */}
+      {/* Company Details */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -362,355 +383,250 @@ export default function SettingsPage() {
               <Building2 className="h-5 w-5 text-blue-600" />
             </div>
             <div>
-              <CardTitle>Company Profile</CardTitle>
-              <CardDescription>Update your company information for use in official documents and resolutions</CardDescription>
+              <CardTitle>Company Details</CardTitle>
+              <CardDescription>Basic company information and registration</CardDescription>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-6">
-          {isLoadingProfile ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="address">Street Address</Label>
+              <Input
+                id="address"
+                placeholder="123 Business Street, Suite 100"
+                value={profile.address || ""}
+                onChange={(e) => handleProfileChange("address", e.target.value)}
+              />
             </div>
-          ) : !canEditSettings && !isOwner ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="rounded-full bg-muted p-4">
-                <Lock className="h-10 w-10 text-muted-foreground" />
-              </div>
-              <h3 className="mt-4 text-lg font-semibold">View Only</h3>
-              <p className="mt-2 text-sm text-muted-foreground">
-                You do not have permission to edit company profile settings.
-              </p>
+            <div className="space-y-2">
+              <Label htmlFor="city">City</Label>
+              <Input
+                id="city"
+                placeholder="Dubai"
+                value={profile.city || ""}
+                onChange={(e) => handleProfileChange("city", e.target.value)}
+              />
             </div>
-          ) : (
-            <>
-              {/* Error/Success messages */}
-              {profileError && (
-                <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
-                  {profileError}
-                </div>
-              )}
-              {profileSuccess && (
-                <div className="rounded-md bg-green-100 p-3 text-sm text-green-700">
-                  Company profile saved successfully
-                </div>
-              )}
-
-              {/* Address Section */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                  <MapPin className="h-4 w-4" />
-                  Address Information
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2 sm:col-span-2">
-                    <Label htmlFor="address">Street Address</Label>
-                    <Input
-                      id="address"
-                      placeholder="123 Business Street, Suite 100"
-                      value={profile.address || ""}
-                      onChange={(e) => handleProfileChange("address", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="city">City</Label>
-                    <Input
-                      id="city"
-                      placeholder="Dubai"
-                      value={profile.city || ""}
-                      onChange={(e) => handleProfileChange("city", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="country">Country</Label>
-                    <Input
-                      id="country"
-                      placeholder="United Arab Emirates"
-                      value={profile.country || ""}
-                      onChange={(e) => handleProfileChange("country", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="postalCode">Postal Code</Label>
-                    <Input
-                      id="postalCode"
-                      placeholder="00000"
-                      value={profile.postalCode || ""}
-                      onChange={(e) => handleProfileChange("postalCode", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="registrationNo">Registration Number</Label>
-                    <Input
-                      id="registrationNo"
-                      placeholder="Company registration number"
-                      value={profile.registrationNo || ""}
-                      onChange={(e) => handleProfileChange("registrationNo", e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Contact Section */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                  <Phone className="h-4 w-4" />
-                  Contact Information
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone Number</Label>
-                    <Input
-                      id="phone"
-                      type="tel"
-                      placeholder="+971 4 123 4567"
-                      value={profile.phone || ""}
-                      onChange={(e) => handleProfileChange("phone", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="companyEmail">Company Email</Label>
-                    <Input
-                      id="companyEmail"
-                      type="email"
-                      placeholder="info@company.com"
-                      value={profile.companyEmail || ""}
-                      onChange={(e) => handleProfileChange("companyEmail", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2 sm:col-span-2">
-                    <Label htmlFor="website">Website</Label>
-                    <Input
-                      id="website"
-                      type="url"
-                      placeholder="https://www.company.com"
-                      value={profile.website || ""}
-                      onChange={(e) => handleProfileChange("website", e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Company Stamp Section */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                  <Stamp className="h-4 w-4" />
-                  Company Stamp
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Upload your company stamp image for use in official resolutions and documents
-                </p>
-                <div className="flex items-start gap-4">
-                  {stampPreview ? (
-                    <div className="relative">
-                      <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-lg border bg-muted">
-                        <img
-                          src={stampPreview}
-                          alt="Company stamp preview"
-                          className="h-full w-full object-contain"
-                        />
-                      </div>
-                      <Button
-                        variant="destructive"
-                        size="icon"
-                        className="absolute -right-2 -top-2 h-6 w-6"
-                        onClick={clearStamp}
-                        type="button"
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex h-24 w-24 items-center justify-center rounded-lg border-2 border-dashed bg-muted/50">
-                      <Stamp className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                  )}
-                  <div className="flex-1 space-y-2">
-                    <Label htmlFor="stamp" className="cursor-pointer">
-                      <div className="flex items-center gap-2 rounded-md border px-4 py-2 text-sm hover:bg-muted">
-                        <Upload className="h-4 w-4" />
-                        {stampPreview ? "Change Stamp" : "Upload Stamp"}
-                      </div>
-                    </Label>
-                    <Input
-                      id="stamp"
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleStampFileChange}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      PNG, JPG, or GIF. Max 5MB.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4 pt-4">
-                <Button onClick={handleSaveProfile} disabled={isSavingProfile || isUploadingStamp}>
-                  {(isSavingProfile || isUploadingStamp) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Save Company Profile
-                </Button>
-              </div>
-            </>
-          )}
+            <div className="space-y-2">
+              <Label htmlFor="country">Country</Label>
+              <Input
+                id="country"
+                placeholder="United Arab Emirates"
+                value={profile.country || ""}
+                onChange={(e) => handleProfileChange("country", e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="postalCode">Postal Code</Label>
+              <Input
+                id="postalCode"
+                placeholder="00000"
+                value={profile.postalCode || ""}
+                onChange={(e) => handleProfileChange("postalCode", e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="registrationNo">Registration Number</Label>
+              <Input
+                id="registrationNo"
+                placeholder="Company registration number"
+                value={profile.registrationNo || ""}
+                onChange={(e) => handleProfileChange("registrationNo", e.target.value)}
+              />
+            </div>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Regional Settings */}
+      {/* Contact Information */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
             <div className="rounded-lg bg-emerald-100 p-2">
-              <Globe className="h-5 w-5 text-emerald-600" />
+              <Phone className="h-5 w-5 text-emerald-600" />
             </div>
             <div>
-              <CardTitle>Regional Settings</CardTitle>
-              <CardDescription>Configure timezone and fiscal year</CardDescription>
+              <CardTitle>Contact Information</CardTitle>
+              <CardDescription>How people can reach your company</CardDescription>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="timezone">Timezone</Label>
-              <Select defaultValue="Asia/Dubai">
-                <SelectTrigger>
-                  <SelectValue placeholder="Select timezone" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Asia/Dubai">Dubai (GST)</SelectItem>
-                  <SelectItem value="America/New_York">New York (EST)</SelectItem>
-                  <SelectItem value="Europe/London">London (GMT)</SelectItem>
-                  <SelectItem value="Asia/Singapore">Singapore (SGT)</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label htmlFor="phone">Phone Number</Label>
+              <Input
+                id="phone"
+                type="tel"
+                placeholder="+971 4 123 4567"
+                value={profile.phone || ""}
+                onChange={(e) => handleProfileChange("phone", e.target.value)}
+              />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="fiscalYear">Fiscal Year Start</Label>
-              <Select defaultValue="1">
-                <SelectTrigger>
-                  <SelectValue placeholder="Select month" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">January</SelectItem>
-                  <SelectItem value="4">April</SelectItem>
-                  <SelectItem value="7">July</SelectItem>
-                  <SelectItem value="10">October</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label htmlFor="companyEmail">Company Email</Label>
+              <Input
+                id="companyEmail"
+                type="email"
+                placeholder="info@company.com"
+                value={profile.companyEmail || ""}
+                onChange={(e) => handleProfileChange("companyEmail", e.target.value)}
+              />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="website">Website</Label>
+              <Input
+                id="website"
+                type="url"
+                placeholder="https://www.company.com"
+                value={profile.website || ""}
+                onChange={(e) => handleProfileChange("website", e.target.value)}
+              />
             </div>
           </div>
-          <Button>Save Changes</Button>
         </CardContent>
       </Card>
 
-      {/* Integrations */}
+      {/* Branding */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
             <div className="rounded-lg bg-purple-100 p-2">
-              <Link2 className="h-5 w-5 text-purple-600" />
+              <ImageIcon className="h-5 w-5 text-purple-600" />
             </div>
             <div>
-              <CardTitle>Integrations</CardTitle>
-              <CardDescription>Connect external services</CardDescription>
+              <CardTitle>Branding</CardTitle>
+              <CardDescription>Visual assets for documents and resolutions</CardDescription>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between rounded-lg border p-4">
-            <div className="flex items-center gap-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100">
-                <Calendar className="h-5 w-5 text-blue-600" />
-              </div>
+        <CardContent>
+          <div className="grid gap-6 sm:grid-cols-2">
+            {/* Company Logo */}
+            <div className="space-y-4 rounded-lg border p-4">
               <div>
-                <h4 className="font-medium">Google Calendar</h4>
+                <h4 className="font-medium">Company Logo</h4>
                 <p className="text-sm text-muted-foreground">
-                  Sync meetings with Google Calendar
+                  Used in official documents and PDF exports
                 </p>
               </div>
+              <div className="flex items-start gap-4">
+                {logoPreview ? (
+                  <div className="relative">
+                    <div className="flex h-20 w-32 items-center justify-center overflow-hidden rounded-lg border bg-white">
+                      <img
+                        src={logoPreview}
+                        alt="Company logo preview"
+                        className="h-full w-full object-contain p-2"
+                      />
+                    </div>
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      className="absolute -right-2 -top-2 h-6 w-6"
+                      onClick={clearLogo}
+                      type="button"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex h-20 w-32 items-center justify-center rounded-lg border-2 border-dashed bg-muted/50">
+                    <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                )}
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="logo" className="cursor-pointer">
+                    <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted">
+                      <Upload className="h-4 w-4" />
+                      {logoPreview ? "Change" : "Upload"}
+                    </div>
+                  </Label>
+                  <Input
+                    id="logo"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleLogoFileChange}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    PNG, JPG, SVG. Max 5MB.
+                  </p>
+                </div>
+              </div>
             </div>
-            <Button variant="outline">Connect</Button>
-          </div>
 
-          <div className="flex items-center justify-between rounded-lg border p-4">
-            <div className="flex items-center gap-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100">
-                <CreditCard className="h-5 w-5 text-green-600" />
-              </div>
+            {/* Company Stamp */}
+            <div className="space-y-4 rounded-lg border p-4">
               <div>
-                <h4 className="font-medium">Xero</h4>
+                <h4 className="font-medium">Company Stamp</h4>
                 <p className="text-sm text-muted-foreground">
-                  Import financial data from Xero
+                  Used in official resolutions and documents
                 </p>
               </div>
+              <div className="flex items-start gap-4">
+                {stampPreview ? (
+                  <div className="relative">
+                    <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-lg border bg-muted">
+                      <img
+                        src={stampPreview}
+                        alt="Company stamp preview"
+                        className="h-full w-full object-contain"
+                      />
+                    </div>
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      className="absolute -right-2 -top-2 h-6 w-6"
+                      onClick={clearStamp}
+                      type="button"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex h-20 w-20 items-center justify-center rounded-lg border-2 border-dashed bg-muted/50">
+                    <Stamp className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                )}
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="stamp" className="cursor-pointer">
+                    <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted">
+                      <Upload className="h-4 w-4" />
+                      {stampPreview ? "Change" : "Upload"}
+                    </div>
+                  </Label>
+                  <Input
+                    id="stamp"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleStampFileChange}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    PNG, JPG, GIF. Max 5MB.
+                  </p>
+                </div>
+              </div>
             </div>
-            <Button variant="outline">Connect</Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Notifications */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <div className="rounded-lg bg-amber-100 p-2">
-              <Bell className="h-5 w-5 text-amber-600" />
-            </div>
-            <div>
-              <CardTitle>Notifications</CardTitle>
-              <CardDescription>Configure email notification preferences</CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium">Meeting Reminders</p>
-                <p className="text-sm text-muted-foreground">
-                  Receive reminders before scheduled meetings
-                </p>
-              </div>
-              <Select defaultValue="1day">
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1day">1 day before</SelectItem>
-                  <SelectItem value="3days">3 days before</SelectItem>
-                  <SelectItem value="1week">1 week before</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Separator />
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium">Action Item Due Dates</p>
-                <p className="text-sm text-muted-foreground">
-                  Get notified when action items are due
-                </p>
-              </div>
-              <Select defaultValue="1day">
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1day">1 day before</SelectItem>
-                  <SelectItem value="3days">3 days before</SelectItem>
-                  <SelectItem value="1week">1 week before</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <Button>Save Preferences</Button>
-        </CardContent>
-      </Card>
+      {/* Save Button */}
+      <div className="flex justify-end">
+        <Button
+          onClick={handleSaveProfile}
+          disabled={isSavingProfile || isUploadingStamp || isUploadingLogo}
+          size="lg"
+        >
+          {(isSavingProfile || isUploadingStamp || isUploadingLogo) && (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          )}
+          Save Changes
+        </Button>
+      </div>
     </div>
   );
 }

@@ -1,0 +1,30 @@
+services:
+  chairboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"   # Web
+      - "3001:3001"   # API
+      - "5433:5432"   # PostgreSQL (external access)
+    volumes:
+      # Mount entire app directories for hot-reloading
+      - ./apps/api:/app/apps/api
+      - ./apps/web:/app/apps/web
+      # Persist PostgreSQL data
+      - pgdata:/data/postgresql
+      # Preserve container's node_modules (don't overwrite with host's)
+      - api_node_modules:/app/apps/api/node_modules
+      - web_node_modules:/app/apps/web/node_modules
+    env_file:
+      - ./apps/api/.env
+      - ./apps/web/.env.local
+    environment:
+      - DATABASE_URL=postgresql://chairboard:chairboard@localhost:5432/chairboard?schema=public
+      - NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1
+
+volumes:
+  pgdata:
+  api_node_modules:
+  web_node_modules:

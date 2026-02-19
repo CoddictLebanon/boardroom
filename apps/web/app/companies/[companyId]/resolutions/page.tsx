@@ -36,6 +36,7 @@ import { ResolutionPDF } from "@/components/resolution-pdf";
 import type { CompanyForPDF, ResolutionSignatureForPDF } from "@/lib/types";
 import { useAuth } from "@clerk/nextjs";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { format } from "date-fns";
 import { usePermission } from "@/lib/permissions";
 import { SignerSelector } from "@/components/signer-selector";
@@ -121,14 +122,8 @@ export default function ResolutionsPage() {
 
   const [resolutions, setResolutions] = useState<Resolution[]>([]);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [selectedResolution, setSelectedResolution] = useState<Resolution | null>(null);
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [category, setCategory] = useState<ResolutionCategory>("GOVERNANCE");
-  const [effectiveDate, setEffectiveDate] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Signature management state
   const [signerDialogOpen, setSignerDialogOpen] = useState(false);
@@ -416,11 +411,11 @@ export default function ResolutionsPage() {
 
       // Ensure members are loaded for title mapping
       let currentMembers = members;
+      const token = await getToken();
       if (currentMembers.length === 0) {
         await fetchMembers();
         // fetchMembers updates state, but we need the value now
         // Re-fetch company data which includes members
-        const token = await getToken();
         const res = await fetch(`${API_URL}/companies/${companyId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -430,21 +425,46 @@ export default function ResolutionsPage() {
         }
       }
 
+      // Get signed signatures
+      const signedSignatures = selectedResolution.signatures?.filter(sig => sig.status === "SIGNED") || [];
+
+      // Fetch fresh signature URLs for all signed users
+      // (pre-signed URLs expire after 1 hour, so we need fresh ones for PDF)
+      let freshSignatureUrls: Record<string, string | null> = {};
+      if (signedSignatures.length > 0) {
+        const userIds = signedSignatures.map(sig => sig.userId);
+        try {
+          const urlsRes = await fetch(`${API_URL}/users/signature-urls`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ userIds }),
+          });
+          if (urlsRes.ok) {
+            freshSignatureUrls = await urlsRes.json();
+          }
+        } catch (e) {
+          console.error("Failed to fetch fresh signature URLs:", e);
+          // Fall back to stored URLs
+        }
+      }
+
       // Map signatures to the format expected by ResolutionPDF
-      const signatures: ResolutionSignatureForPDF[] = selectedResolution.signatures
-        ?.filter(sig => sig.status === "SIGNED")
+      const signatures: ResolutionSignatureForPDF[] = signedSignatures
         .map(sig => {
           const member = currentMembers.find(m => m.user.id === sig.userId);
           return {
             user: {
               firstName: sig.user.firstName || "",
               lastName: sig.user.lastName || "",
-              signatureUrl: sig.user.signatureUrl || undefined,
+              signatureUrl: freshSignatureUrls[sig.userId] || sig.user.signatureUrl || undefined,
             },
             signedAt: sig.signedAt || undefined,
             title: member?.title || undefined,
           };
-        }) || [];
+        });
 
       const blob = await pdf(
         <ResolutionPDF
@@ -473,57 +493,6 @@ export default function ResolutionsPage() {
       alert("Failed to generate PDF. Please try again.");
     } finally {
       setIsGeneratingPDF(false);
-    }
-  };
-
-  const resetForm = () => {
-    setTitle("");
-    setContent("");
-    setCategory("GOVERNANCE");
-    setEffectiveDate("");
-  };
-
-  const handleSubmit = async () => {
-    if (!title.trim() || !content.trim()) return;
-
-    try {
-      setIsSubmitting(true);
-      const token = await getToken();
-
-      const response = await fetch(`${API_URL}/companies/${companyId}/resolutions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          title: title.trim(),
-          content: content.trim(),
-          category,
-          effectiveDate: effectiveDate || undefined,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || "Failed to create resolution");
-      }
-
-      // Optimistic update - add to list immediately
-      const createdResolution = await response.json();
-      setResolutions((prev) => [createdResolution, ...prev]);
-
-      resetForm();
-      setDialogOpen(false);
-
-      // Background refresh
-      fetchResolutions(false);
-    } catch (error) {
-      console.error("Error creating resolution:", error);
-      alert(error instanceof Error ? error.message : "Failed to create resolution. Please try again.");
-      fetchResolutions(false);
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -632,10 +601,12 @@ export default function ResolutionsPage() {
           </p>
         </div>
         {canCreate && (
-          <Button onClick={() => setDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Resolution
-          </Button>
+          <Link href={`/companies/${companyId}/resolutions/new`}>
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              New Resolution
+            </Button>
+          </Link>
         )}
       </div>
 
@@ -822,91 +793,22 @@ export default function ResolutionsPage() {
                 Create your first board resolution to get started.
               </p>
               {canCreate && (
-                <Button className="mt-4" onClick={() => setDialogOpen(true)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Resolution
-                </Button>
+                <Link href={`/companies/${companyId}/resolutions/new`}>
+                  <Button className="mt-4">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create Resolution
+                  </Button>
+                </Link>
               )}
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* New Resolution Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={(open) => {
-        setDialogOpen(open);
-        if (!open) resetForm();
-      }}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>New Resolution</DialogTitle>
-            <DialogDescription>
-              Create a new board resolution. It will start as a Draft.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="title">Title</Label>
-              <Input
-                id="title"
-                placeholder="e.g., Approve 2025 Budget"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="content">Resolution Content</Label>
-              <Textarea
-                id="content"
-                placeholder="BE IT RESOLVED that the Board of Directors hereby approves..."
-                rows={4}
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="category">Category</Label>
-                <Select value={category} onValueChange={(v) => setCategory(v as ResolutionCategory)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="FINANCIAL">Financial</SelectItem>
-                    <SelectItem value="GOVERNANCE">Governance</SelectItem>
-                    <SelectItem value="HR">HR</SelectItem>
-                    <SelectItem value="OPERATIONS">Operations</SelectItem>
-                    <SelectItem value="STRATEGIC">Strategic</SelectItem>
-                    <SelectItem value="OTHER">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="effective-date">Effective Date (optional)</Label>
-                <Input
-                  id="effective-date"
-                  type="date"
-                  value={effectiveDate}
-                  onChange={(e) => setEffectiveDate(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={isSubmitting}>
-              Cancel
-            </Button>
-            <Button onClick={handleSubmit} disabled={isSubmitting || !title.trim() || !content.trim()}>
-              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create Resolution
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* View Resolution Dialog */}
       <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[60vw] max-h-[90vh] overflow-y-auto">
           {selectedResolution && (
             <>
               <DialogHeader>

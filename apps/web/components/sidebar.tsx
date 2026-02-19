@@ -15,6 +15,7 @@ import {
   Users,
   ChevronLeft,
   ChevronRight,
+  UserCircle,
 } from "lucide-react";
 import { CompanySwitcher } from "./company-switcher";
 import { UserButton } from "@clerk/nextjs";
@@ -56,6 +57,7 @@ export function Sidebar({ companyId }: SidebarProps) {
   );
 
   const secondaryNavigation = [
+    { name: "My Profile", href: `${basePath}/profile`, icon: UserCircle },
     { name: "Settings", href: `${basePath}/settings`, icon: Settings },
   ];
 

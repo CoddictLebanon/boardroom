@@ -1,6 +1,12 @@
-import { IsString, IsOptional, IsUrl, IsEmail, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsUrl, IsEmail, MaxLength, ValidateIf } from 'class-validator';
 
 export class UpdateCompanyProfileDto {
+  @ValidateIf((o) => o.logo !== null && o.logo !== '')
+  @IsUrl({ require_tld: false })
+  @MaxLength(500)
+  @IsOptional()
+  logo?: string;
+
   @IsString()
   @MaxLength(500)
   @IsOptional()
@@ -36,12 +42,14 @@ export class UpdateCompanyProfileDto {
   @IsOptional()
   companyEmail?: string;
 
-  @IsUrl()
+  @ValidateIf((o) => o.website !== null && o.website !== '')
+  @IsUrl({ require_tld: false })
   @MaxLength(500)
   @IsOptional()
   website?: string;
 
-  @IsUrl()
+  @ValidateIf((o) => o.stampUrl !== null && o.stampUrl !== '')
+  @IsUrl({ require_tld: false })
   @MaxLength(500)
   @IsOptional()
   stampUrl?: string;

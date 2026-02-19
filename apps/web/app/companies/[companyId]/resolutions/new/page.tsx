@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Send, Loader2, Save, FileText, Bot, User } from "lucide-react";
+import { ArrowLeft, Send, Loader2, Save, FileText, Bot, User, RotateCcw } from "lucide-react";
 import Link from "next/link";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
@@ -14,6 +14,155 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1
 interface Message {
   role: "user" | "assistant";
   content: string;
+}
+
+// Component to render formatted resolution preview
+function ResolutionPreview({ content }: { content: string }) {
+  const lines = content.split("\n");
+  const elements: React.ReactNode[] = [];
+  let currentParagraph: string[] = [];
+
+  const flushParagraph = () => {
+    if (currentParagraph.length > 0) {
+      const text = currentParagraph.join(" ").trim();
+      if (text) {
+        elements.push(
+          <p key={elements.length} className="mb-4 text-sm leading-relaxed">
+            {text}
+          </p>
+        );
+      }
+      currentParagraph = [];
+    }
+  };
+
+  lines.forEach((line, index) => {
+    const trimmedLine = line.trim();
+
+    // Empty line - flush current paragraph
+    if (!trimmedLine) {
+      flushParagraph();
+      return;
+    }
+
+    // Main title: RESOLUTION OF THE BOARD OF DIRECTORS
+    if (trimmedLine.match(/^RESOLUTION OF THE BOARD/i)) {
+      flushParagraph();
+      elements.push(
+        <h1 key={elements.length} className="text-lg font-bold text-center mb-2 uppercase tracking-wide">
+          {trimmedLine}
+        </h1>
+      );
+      return;
+    }
+
+    // Company name line (OF COMPANY NAME)
+    if (trimmedLine.match(/^OF\s+[A-Z]/i) && elements.length === 1) {
+      elements.push(
+        <h2 key={elements.length} className="text-base font-semibold text-center mb-6 uppercase">
+          {trimmedLine}
+        </h2>
+      );
+      return;
+    }
+
+    // Category line
+    if (trimmedLine.match(/^Category:/i)) {
+      flushParagraph();
+      elements.push(
+        <p key={elements.length} className="text-sm font-medium text-muted-foreground mb-6 text-center">
+          {trimmedLine}
+        </p>
+      );
+      return;
+    }
+
+    // WHEREAS clause
+    if (trimmedLine.match(/^WHEREAS/i)) {
+      flushParagraph();
+      elements.push(
+        <p key={elements.length} className="mb-4 text-sm leading-relaxed">
+          <span className="font-semibold">WHEREAS</span>
+          {trimmedLine.replace(/^WHEREAS,?\s*/i, ", ")}
+        </p>
+      );
+      return;
+    }
+
+    // NOW, THEREFORE clause
+    if (trimmedLine.match(/^NOW,?\s*THEREFORE/i)) {
+      flushParagraph();
+      elements.push(
+        <p key={elements.length} className="mb-4 text-sm leading-relaxed font-medium">
+          {trimmedLine}
+        </p>
+      );
+      return;
+    }
+
+    // RESOLVED clause
+    if (trimmedLine.match(/^(BE IT\s+)?RESOLVED/i)) {
+      flushParagraph();
+      const match = trimmedLine.match(/^(BE IT\s+)?(RESOLVED)/i);
+      if (match) {
+        elements.push(
+          <p key={elements.length} className="mb-4 text-sm leading-relaxed">
+            {match[1] && <span>{match[1]}</span>}
+            <span className="font-semibold">RESOLVED</span>
+            {trimmedLine.replace(/^(BE IT\s+)?RESOLVED,?\s*/i, ", ")}
+          </p>
+        );
+      }
+      return;
+    }
+
+    // FURTHER RESOLVED clause
+    if (trimmedLine.match(/^(BE IT\s+)?FURTHER RESOLVED/i)) {
+      flushParagraph();
+      elements.push(
+        <p key={elements.length} className="mb-4 text-sm leading-relaxed">
+          <span className="font-semibold">FURTHER RESOLVED</span>
+          {trimmedLine.replace(/^(BE IT\s+)?FURTHER RESOLVED,?\s*/i, ", ")}
+        </p>
+      );
+      return;
+    }
+
+    // Date/signature lines at the end
+    if (trimmedLine.match(/^(Date:|Adopted:|Effective:|Secretary|Chairman|Director)/i)) {
+      flushParagraph();
+      elements.push(
+        <p key={elements.length} className="mb-2 text-sm">
+          {trimmedLine}
+        </p>
+      );
+      return;
+    }
+
+    // Signature line (underscores)
+    if (trimmedLine.match(/^_{3,}/) || trimmedLine.match(/^-{3,}/)) {
+      flushParagraph();
+      elements.push(
+        <div key={elements.length} className="mb-4 mt-8">
+          <div className="border-b border-gray-400 w-48 mb-1" />
+          <p className="text-xs text-muted-foreground">Signature</p>
+        </div>
+      );
+      return;
+    }
+
+    // Regular text - add to current paragraph
+    currentParagraph.push(trimmedLine);
+  });
+
+  // Flush any remaining paragraph
+  flushParagraph();
+
+  return (
+    <div className="font-serif">
+      {elements}
+    </div>
+  );
 }
 
 export default function NewResolutionChatPage() {
@@ -28,9 +177,42 @@ export default function NewResolutionChatPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [currentDraft, setCurrentDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const storageKey = `resolution-draft-${companyId}`;
+
+  // Load saved state from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const { messages: savedMessages, draft } = JSON.parse(saved);
+        if (savedMessages?.length) setMessages(savedMessages);
+        if (draft) setCurrentDraft(draft);
+      }
+    } catch (e) {
+      console.error("Failed to load saved draft:", e);
+    }
+    setIsInitialized(true);
+  }, [storageKey]);
+
+  // Save state to localStorage whenever it changes
+  useEffect(() => {
+    if (!isInitialized) return;
+    try {
+      if (messages.length > 0 || currentDraft) {
+        localStorage.setItem(storageKey, JSON.stringify({
+          messages,
+          draft: currentDraft,
+        }));
+      }
+    } catch (e) {
+      console.error("Failed to save draft:", e);
+    }
+  }, [messages, currentDraft, storageKey, isInitialized]);
 
   // Scroll to bottom of messages when new messages are added
   useEffect(() => {
@@ -51,10 +233,10 @@ export default function NewResolutionChatPage() {
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isLoading) return;
 
-    const userMessage: Message = { role: "user", content: inputValue.trim() };
+    const userMessageContent = inputValue.trim();
+    const userMessage: Message = { role: "user", content: userMessageContent };
     // Capture current messages before async operations to avoid race conditions
     const currentMessages = [...messages];
-    const updatedMessages = [...currentMessages, userMessage];
     setMessages(prev => [...prev, userMessage]);
     setInputValue("");
     setError(null);
@@ -73,7 +255,9 @@ export default function NewResolutionChatPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          messages: updatedMessages,
+          message: userMessageContent,
+          conversationHistory: currentMessages,
+          currentDraft: currentDraft || undefined,
         }),
       });
 
@@ -147,6 +331,19 @@ export default function NewResolutionChatPage() {
     return "New Resolution";
   };
 
+  // Extract category from draft content
+  const extractCategory = (content: string): string => {
+    const categoryMatch = content.match(/Category:\s*(\w+)/i);
+    if (categoryMatch) {
+      const category = categoryMatch[1].toUpperCase();
+      const validCategories = ["FINANCIAL", "GOVERNANCE", "HR", "OPERATIONS", "STRATEGIC", "OTHER"];
+      if (validCategories.includes(category)) {
+        return category;
+      }
+    }
+    return "OTHER";
+  };
+
   // Save draft to API
   const saveDraft = async () => {
     if (!currentDraft.trim()) {
@@ -164,6 +361,7 @@ export default function NewResolutionChatPage() {
         return;
       }
       const title = extractTitle(currentDraft);
+      const category = extractCategory(currentDraft);
 
       const response = await fetch(`${API_URL}/companies/${companyId}/resolutions`, {
         method: "POST",
@@ -174,8 +372,8 @@ export default function NewResolutionChatPage() {
         body: JSON.stringify({
           title,
           content: currentDraft,
+          category,
           status: "DRAFT",
-          generatedBy: "AI",
         }),
       });
 
@@ -186,8 +384,11 @@ export default function NewResolutionChatPage() {
 
       const resolution = await response.json();
 
-      // Redirect to the resolution detail page
-      router.push(`/companies/${companyId}/resolutions/${resolution.id}`);
+      // Clear localStorage on successful save
+      localStorage.removeItem(storageKey);
+
+      // Redirect to the resolutions list (detail page will be created later)
+      router.push(`/companies/${companyId}/resolutions`);
     } catch (err) {
       console.error("Error saving draft:", err);
       setError(err instanceof Error ? err.message : "Failed to save draft. Please try again.");
@@ -213,22 +414,38 @@ export default function NewResolutionChatPage() {
             </p>
           </div>
         </div>
-        <Button
-          onClick={saveDraft}
-          disabled={!currentDraft.trim() || isSaving}
-        >
-          {isSaving ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Saving...
-            </>
-          ) : (
-            <>
-              <Save className="mr-2 h-4 w-4" />
-              Save as Draft
-            </>
+        <div className="flex gap-2">
+          {(messages.length > 0 || currentDraft) && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                localStorage.removeItem(storageKey);
+                setMessages([]);
+                setCurrentDraft("");
+                setError(null);
+              }}
+            >
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Start New
+            </Button>
           )}
-        </Button>
+          <Button
+            onClick={saveDraft}
+            disabled={!currentDraft.trim() || isSaving}
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="mr-2 h-4 w-4" />
+                Save as Draft
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Error Message */}
@@ -342,11 +559,9 @@ export default function NewResolutionChatPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="flex-1 min-h-0 pt-0">
-            <div className="h-full overflow-y-auto rounded-lg border bg-muted/30 p-6">
+            <div className="h-full overflow-y-auto rounded-lg border bg-white p-8">
               {currentDraft ? (
-                <pre className="whitespace-pre-wrap font-serif text-sm leading-relaxed">
-                  {currentDraft}
-                </pre>
+                <ResolutionPreview content={currentDraft} />
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
                   <FileText className="h-12 w-12 mb-4 opacity-50" />
