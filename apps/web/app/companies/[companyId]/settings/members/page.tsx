@@ -203,7 +203,7 @@ export default function MembersPage() {
 
     try {
       const token = await getToken();
-      await fetch(`${API_URL}/invitations/${invitationId}`, {
+      await fetch(`${API_URL}/companies/${companyId}/invitations/${invitationId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
