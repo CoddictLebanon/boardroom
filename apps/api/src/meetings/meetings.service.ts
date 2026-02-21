@@ -122,18 +122,15 @@ export class MeetingsService {
     }
 
     if (filters?.upcoming) {
-      where.scheduledAt = {
-        gte: new Date(),
-      };
       where.status = {
-        in: [MeetingStatus.SCHEDULED, MeetingStatus.IN_PROGRESS],
+        in: [MeetingStatus.SCHEDULED, MeetingStatus.IN_PROGRESS, MeetingStatus.PAUSED],
       };
     }
 
     if (filters?.past) {
       where.OR = [
         { scheduledAt: { lt: new Date() } },
-        { status: MeetingStatus.COMPLETED },
+        { status: { in: [MeetingStatus.COMPLETED, MeetingStatus.CANCELLED] } },
       ];
     }
 
@@ -164,6 +161,27 @@ export class MeetingsService {
         scheduledAt: 'desc',
       },
     });
+
+    // Post-filter by meeting end time (scheduledAt + duration) instead of just start time
+    // This ensures meetings remain "upcoming" until they've actually ended
+    if (filters?.upcoming) {
+      const now = new Date();
+      return meetings.filter((meeting) => {
+        const endTime = new Date(meeting.scheduledAt.getTime() + meeting.duration * 60 * 1000);
+        return endTime > now;
+      });
+    }
+
+    if (filters?.past) {
+      const now = new Date();
+      return meetings.filter((meeting) => {
+        if (meeting.status === MeetingStatus.COMPLETED || meeting.status === MeetingStatus.CANCELLED) {
+          return true;
+        }
+        const endTime = new Date(meeting.scheduledAt.getTime() + meeting.duration * 60 * 1000);
+        return endTime <= now;
+      });
+    }
 
     return meetings;
   }
@@ -604,6 +622,7 @@ export class MeetingsService {
         createdById: userId,
         title: dto.title,
         description: dto.description,
+        votingEnabled: dto.votingEnabled ?? true,
         order: nextOrder,
       },
       include: {
@@ -660,6 +679,11 @@ export class MeetingsService {
 
     if (!decision) {
       throw new NotFoundException('Decision not found');
+    }
+
+    // Check if voting is enabled for this decision
+    if (!decision.votingEnabled) {
+      throw new BadRequestException('Voting is not enabled for this decision');
     }
 
     // Verify user is an attendee
@@ -1048,9 +1072,11 @@ export class MeetingsService {
       },
     });
 
-    // Update each decision's outcome
+    // Update each decision's outcome (skip voting-disabled and already-resolved decisions)
     await Promise.all(
       decisionsWithVotes.map(async (decision) => {
+        if (!decision.votingEnabled || decision.outcome) return;
+
         const forVotes = decision.votes.filter((v) => v.vote === 'FOR').length;
         const againstVotes = decision.votes.filter((v) => v.vote === 'AGAINST').length;
 

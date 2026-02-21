@@ -105,6 +105,7 @@ export interface Decision {
   title: string;
   description: string | null;
   outcome: DecisionOutcome | null;
+  votingEnabled: boolean;
   votes?: Vote[];
   createdBy?: User;
 }

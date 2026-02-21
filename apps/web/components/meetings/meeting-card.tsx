@@ -120,9 +120,10 @@ function AttendeeAvatars({ attendees }: { attendees: MeetingAttendee[] }) {
 export function MeetingCard({ meeting, companyId, onCancel }: MeetingCardProps) {
   const router = useRouter();
   const scheduledDate = new Date(meeting.scheduledAt);
-  const isUpcoming = scheduledDate > new Date() && meeting.status === "SCHEDULED";
+  const meetingEndTime = new Date(scheduledDate.getTime() + meeting.duration * 60 * 1000);
+  const isUpcoming = meetingEndTime > new Date() && meeting.status === "SCHEDULED";
   const isInProgress = meeting.status === "IN_PROGRESS" || meeting.status === "PAUSED";
-  const isPastMeeting = isPast(scheduledDate);
+  const isPastMeeting = isPast(meetingEndTime);
   const status = statusConfig[meeting.status];
 
   const basePath = `/companies/${companyId}/meetings/${meeting.id}`;

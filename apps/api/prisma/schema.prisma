@@ -273,16 +273,17 @@ model MeetingTemplate {
 // ==========================================
 
 model Decision {
-  id           String           @id @default(cuid())
-  meetingId    String
-  agendaItemId String?
-  createdById  String?
-  title        String
-  description  String?
-  outcome      DecisionOutcome?
-  order        Int              @default(0)
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  id             String           @id @default(cuid())
+  meetingId      String
+  agendaItemId   String?
+  createdById    String?
+  title          String
+  description    String?
+  outcome        DecisionOutcome?
+  votingEnabled  Boolean          @default(true)
+  order          Int              @default(0)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
 
   meeting    Meeting     @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   agendaItem AgendaItem? @relation(fields: [agendaItemId], references: [id])

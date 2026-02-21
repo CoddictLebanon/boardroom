@@ -533,19 +533,36 @@ export class CompaniesService {
 
     // Get all stats in parallel
     const [
-      upcomingMeetingsCount,
+      allActiveMeetings,
       openActionItemsCount,
       pendingResolutionsCount,
       boardMembersCount,
-      upcomingMeetings,
       userActionItems,
     ] = await Promise.all([
-      // Upcoming meetings count
-      this.prisma.meeting.count({
+      // Active meetings (scheduled, in progress, or paused) - post-filtered by end time
+      this.prisma.meeting.findMany({
         where: {
           companyId,
-          status: 'SCHEDULED',
-          scheduledAt: { gte: now },
+          status: { in: ['SCHEDULED', 'IN_PROGRESS', 'PAUSED'] },
+        },
+        orderBy: { scheduledAt: 'asc' },
+        include: {
+          attendees: {
+            include: {
+              member: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      firstName: true,
+                      lastName: true,
+                      imageUrl: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
       }),
       // Open action items count
@@ -569,34 +586,6 @@ export class CompaniesService {
           status: MemberStatus.ACTIVE,
         },
       }),
-      // Upcoming meetings list (next 5)
-      this.prisma.meeting.findMany({
-        where: {
-          companyId,
-          status: 'SCHEDULED',
-          scheduledAt: { gte: now },
-        },
-        orderBy: { scheduledAt: 'asc' },
-        take: 5,
-        include: {
-          attendees: {
-            include: {
-              member: {
-                include: {
-                  user: {
-                    select: {
-                      id: true,
-                      firstName: true,
-                      lastName: true,
-                      imageUrl: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      }),
       // User's action items (assigned to them)
       this.prisma.actionItem.findMany({
         where: {
@@ -612,14 +601,21 @@ export class CompaniesService {
       }),
     ]);
 
+    // Filter upcoming meetings by end time (scheduledAt + duration)
+    // A meeting remains "upcoming" until its scheduled end time has passed
+    const upcomingMeetings = allActiveMeetings.filter((meeting) => {
+      const endTime = new Date(meeting.scheduledAt.getTime() + meeting.duration * 60 * 1000);
+      return endTime > now;
+    });
+
     return {
       stats: {
-        upcomingMeetings: upcomingMeetingsCount,
+        upcomingMeetings: upcomingMeetings.length,
         openActionItems: openActionItemsCount,
         pendingResolutions: pendingResolutionsCount,
         boardMembers: boardMembersCount,
       },
-      upcomingMeetings,
+      upcomingMeetings: upcomingMeetings.slice(0, 5),
       userActionItems,
     };
   }

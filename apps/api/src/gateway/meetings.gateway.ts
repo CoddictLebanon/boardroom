@@ -235,6 +235,11 @@ export class MeetingsGateway
       throw new WsException('Access denied');
     }
 
+    // Verify voting is enabled for this decision
+    if (!decision.votingEnabled) {
+      throw new WsException('Voting is not enabled for this decision');
+    }
+
     // Verify meeting is in progress
     if (decision.meeting.status !== 'IN_PROGRESS') {
       throw new WsException('Voting is only allowed during live meetings');

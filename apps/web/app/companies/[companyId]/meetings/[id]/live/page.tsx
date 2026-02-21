@@ -107,7 +107,9 @@ import { CSS } from "@dnd-kit/utilities";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
 
-import { MeetingDocument } from "@/lib/types";
+import { pdf } from "@react-pdf/renderer";
+import { MeetingDocument, CompanyForPDF } from "@/lib/types";
+import { MeetingSummaryPDF } from "@/components/meeting-summary-pdf";
 
 type VoteType = "FOR" | "AGAINST" | "ABSTAIN";
 
@@ -432,7 +434,7 @@ function SortableDecision({
   const againstVotes = votes.filter((v: { vote: string }) => v.vote === "AGAINST").length;
   const abstainVotes = votes.filter((v: { vote: string }) => v.vote === "ABSTAIN").length;
   const myVote = votes.find((v: { userId: string; vote: string }) => v.userId === currentUser?.id);
-  const isOpenForVoting = !decision.outcome;
+  const isOpenForVoting = !decision.outcome && decision.votingEnabled !== false;
   const isCurrentUserAttendee = attendees.some((a) => a.member?.userId === currentUser?.id && a.isPresent);
 
   return (
@@ -474,10 +476,11 @@ function SortableDecision({
             className={
               decision.outcome === "PASSED" ? "bg-green-100 text-green-800" :
               decision.outcome === "REJECTED" ? "bg-red-100 text-red-800" :
+              decision.votingEnabled === false ? "bg-slate-100 text-slate-600" :
               "bg-purple-100 text-purple-800"
             }
           >
-            {decision.outcome || "Open for Voting"}
+            {decision.outcome || (decision.votingEnabled !== false ? "Open for Voting" : "No Voting")}
           </Badge>
           {isActive && (
             <DropdownMenu>
@@ -780,6 +783,8 @@ export default function LiveMeetingPage({
   const [actionPriority, setActionPriority] = useState<"HIGH" | "MEDIUM" | "LOW">("MEDIUM");
   const [isSubmittingAction, setIsSubmittingAction] = useState(false);
   const [companyMembers, setCompanyMembers] = useState<CompanyMember[]>([]);
+  const [companyData, setCompanyData] = useState<CompanyForPDF | null>(null);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [editingActionId, setEditingActionId] = useState<string | null>(null);
   const [deletingActionId, setDeletingActionId] = useState<string | null>(null);
   const [showDeleteActionConfirm, setShowDeleteActionConfirm] = useState(false);
@@ -819,6 +824,17 @@ export default function LiveMeetingPage({
         if (response.ok) {
           const company = await response.json();
           setCompanyMembers(company.members || []);
+          setCompanyData({
+            name: company.name,
+            logo: company.logo,
+            address: company.address,
+            city: company.city,
+            country: company.country,
+            registrationNo: company.registrationNo,
+            phone: company.phone,
+            website: company.website,
+            stampUrl: company.stampUrl,
+          });
         }
       } catch (error) {
         console.error("Error loading members:", error);
@@ -1254,6 +1270,37 @@ export default function LiveMeetingPage({
     }
   };
 
+  const handleDownloadPdf = async () => {
+    if (!meeting || !companyData) return;
+    try {
+      setIsDownloadingPdf(true);
+      const blob = await pdf(
+        <MeetingSummaryPDF
+          meeting={meeting}
+          company={companyData}
+          attendees={attendees}
+          agendaItems={agendaItems}
+          decisions={decisions}
+          actionItems={actionItems}
+          notes={notes}
+        />
+      ).toBlob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${meeting.title.replace(/[^a-zA-Z0-9]/g, "_")}_Minutes.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      alert("Failed to generate PDF. Please try again.");
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
   const handleUpdateAttendance = async (attendeeId: string, isPresent: boolean) => {
     try {
       setAttendanceUpdating(attendeeId);
@@ -1418,6 +1465,7 @@ export default function LiveMeetingPage({
         body: JSON.stringify({
           title: voteTitle.trim(),
           description: voteDescription.trim() || undefined,
+          votingEnabled: includeVoting,
         }),
       });
       if (!response.ok) throw new Error("Failed to create decision");
@@ -1942,10 +1990,22 @@ export default function LiveMeetingPage({
             <div className="rounded-full bg-gray-100 p-2">
               <CheckCircle2 className="h-5 w-5 text-gray-600" />
             </div>
-            <div>
+            <div className="flex-1">
               <p className="font-medium text-gray-800">Meeting has ended</p>
               <p className="text-sm text-gray-600">This meeting is now complete. Below is a summary of all discussions and decisions.</p>
             </div>
+            <Button
+              variant="outline"
+              onClick={handleDownloadPdf}
+              disabled={isDownloadingPdf}
+            >
+              {isDownloadingPdf ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="mr-2 h-4 w-4" />
+              )}
+              Download PDF
+            </Button>
           </CardContent>
         </Card>
       )}
